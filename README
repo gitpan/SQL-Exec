@@ -1,0 +1,192 @@
+NAME
+    SQL::Exec - Functionnal and OO interface to the DBI and
+    DBIx::Connector
+
+SYNOPSIS
+      use SQL::Exec ':all';
+  
+      connect('dbi:SQLite:dbname=db_file');
+  
+      execute(SQL);
+  
+      my $val = query_one_value(SQL);
+  
+      my @line = query_one_line(SQL);
+  
+      my @table = query_all_line(SQL);
+
+  Main functionnalities
+    *   fonction à appelé selon la géométrie de ce qu'on veut obtenir, pas
+        selon des considérations de performances ou autre
+
+    *   pas obligatoirement OO, entièrement fonctionnel si on le souhaite
+
+    *   gestion des erreurs par défaut donc pas besoin de tester quoi que ce
+        soit si on ne veut pas
+
+    *   aucun DBIism, pas de gestion des paramètres, drivers, etc, sauf si
+        on veut
+
+    *   agnostique de base de données
+
+    *   interface très simple
+
+    *   ce n'est pas un ORM
+
+    *   on ne génère pas de SQL à la place de l'utilisateur (sauf rares
+        exceptions) on peut utiliser SQL::Abstract si on veut.
+
+    *   split automatic des requêtes multi-statement avec
+        SQL::SplitStatement
+
+DESCRIPTION
+    dire un peu ce qu'est DBI et ce que sont les DBD.
+
+  Support of specific DB
+    The "SQL::Exec" library is mostly database agnostic. However there
+    is some support (limited at the moment) for specific database which will
+    extends the functionnalities of the library for those database.
+
+    If there is a sub-classe of "SQL::Exec" for your prefered RDBMS you
+    should use it (for both the OO and the functionnal interface of the
+    library) rather than using directly "SQL::Exec". These sub-classes
+    will provide tuned functions and method for your RDBMS, additionnal
+    functionnalities, will set specific database parameters correctly and
+    will assist you to connect to your desired database.
+
+    You will find in "SUB-CLASSES" a list of the supported RDBMS and a link
+    to the documentation of their specific modules. If your prefered
+    database is not listed there, you can still use "SQL::Exec" but you
+    will not get the specific functionnalities that it can offer.
+
+CONSTRUCTORS/DESTRUCTORS
+    If you want to use this library in an object oriented way (or if you
+    want to use multiple database connection at once) you will need to
+    create "SQL::Exec" object using the constructors described here. If
+    you want to use this library in a purely functionnal way then you will
+    want to take a look at the "connect" function described below which will
+    allow you to connect the library without using a single object.
+
+  new
+      my $h = SQL::Exec->new($dsn, $user, $password, %opts);
+
+    Create a new "SQL::Exec" object and connect-it to the database
+    defined by the $dsn argument, with the supplied $user and $password if
+    necessary.
+
+    The syntax of the $dsn argument is described in the manual of your "DBD"
+    driver. However, you will probably want to use one of the existing
+    sub-classes of this module to assist you in connecting to some specific
+    database.
+
+    The %opts argument is optionnal and may be given as a hash or as a hash
+    reference. If the argument is given it set accordingly the option of the
+    object being created. See the "set_options" method for a description of
+    the available options.
+
+  new_no_connect
+      my $h = SQL::Exec->new_no_connect(%opts);
+
+    This constructor creates a "SQL::Exec" object without connecting it
+    to any database. You will need to call the "connect" option on the
+    handle to connect it to a database.
+
+    The %opts argument is optionnal and is the same as for the "new"
+    constructor.
+
+  destructor
+    Whenever you have finished working with a database connection you may
+    close it (see the "disconnect" function) or you may just let go of the
+    database handle. There is a "DESTROY" method in this package which will
+    take care of closing the database connection correctly whenever your
+    handle is garbage collected.
+
+GETTER/SETTER AND OPTIONS
+  connect
+  disconnect
+  is_connected
+  get_default_handle
+  errstr
+  set_options
+  set_option
+STANDARD QUERY FUNCTIONS
+  execute
+  query_one_value
+  query_one_line
+  query_all_lines
+  query_one_column
+  query_to_file
+SUB-CLASSING
+    howto =head2 SUB-CLASSES
+
+    SQLite and ODBC...
+
+EXAMPLE
+    Here is an example of a small test file using this module.
+
+      use strict;
+      use warnings;
+      use Test::Subs;
+  
+      test { 1 == 1 } 'This is the first test';
+  
+      todo { 1 == 2 };
+  
+      not_ok { 0 };
+  
+      fail { die "fail" };
+
+    Run through "Test::Harness" this file will pass, with only the second
+    test failing (but marked *todo* so that's OK).
+
+CAVEATS
+    This package does not use the "Test::Builder" facility and as such is
+    not compatible with other testing modules are using "Test::Builder".
+    This may be changed in a future release.
+
+    The standard set by "Test::Harness" is that all output to "STDOUT" is
+    interpreted by the test parser. So a test file should write additional
+    output only to "STDERR". This is what will be done by the "comment"
+    fonction. To help with this, during the execution of your test file, the
+    "STDERR" file-handle will be "select"-ed. So any un-qualified "print" or
+    "printf" call will end in "STDERR".
+
+    This package use source filtering (with "Filter::Simple"). The filter
+    applied is very simple, but there is a slight possibility that it is
+    incompatible with other source filter. If so, do not hesitate to report
+    this as a bug.
+
+BUGS
+    Please report any bugs or feature requests to
+    "bug-dbix-puresql@rt.cpan.org", or through the web interface at
+    <http://rt.cpan.org/NoAuth/ReportBug.html?Queue=DBIx-PureSQL>.
+
+SEE ALSO
+    At some point or another you will want to look at the DBI documentation,
+    mother of all database manipulation in Perl. You may also want to look
+    at the DBIx::Connector and SQL::SplitStatement modules upon which
+    "SQL::Exec" is based.
+
+    There is several CPAN module similar to "SQL::Exec", I list here
+    only the closest (e.g. which does not impose OO upon your code), you
+    should have a look at them before deciding to use "SQL::Exec":
+    DBI::Simple, DBIx::Simple, DBIx::DWIW, DBIx::Wrapper,
+    DBIx::SimpleGoBetween, DBIx::Sunny.
+
+    Also, "SQL::Exec" will try its best to enable you to run your SQL
+    code in a simple and efficiant way but it will not boil your coffee. You
+    may be interested in other packages which will extend "SQL::Exec"
+    functionnalities, like SQL::Abstract and SQL::Transformer.
+
+AUTHOR
+    Mathias Kende (mathias@cpan.org)
+
+VERSION
+    Version 0.01 (January 2013)
+
+COPYRIGHT & LICENSE
+    Copyright 2012 © Mathias Kende. All rights reserved.
+
+    This program is free software; you can redistribute it and/or modify it
+    under the same terms as Perl itself.
+
