@@ -1,14 +1,14 @@
-package DBIx::PureSQL::ODBC::Teradata;
+package SQL::Exec::ODBC::Teradata;
 use strict;
 use warnings;
 use Exporter 'import';
 use DBI;
-use DBIx::PureSQL::ODBC '/.*/', '!connect';
+use SQL::Exec::ODBC '/.*/', '!connect', '!table_exists';
 
-our @ISA = ('DBIx::PureSQL::ODBC');
+our @ISA = ('SQL::Exec::ODBC');
 
-our @EXPORT_OK = ('connect', @DBIx::PureSQL::ODBC::EXPORT_OK);
-
+our @EXPORT_OK = @SQL::Exec::ODBC::EXPORT_OK;
+our %EXPORT_TAGS = ( all => \@EXPORT_OK );
 
 # dsn est le DSN au sens ODBC.
 # par exemple 'DSN=dcn' (nom enregistré)
@@ -61,4 +61,39 @@ sub table_exists {
 
 
 1;
+
+
+=encoding utf-8
+
+=head1 NAME
+
+SQL::Exec::ODBC::Teradata - Specific support for the Teradata ODBC driver in SQL::Exec
+
+=head1 SYNOPSIS
+
+  use SQL::Exec::ODBC::Teradata;
+  
+  SQL::Exec::ODBC:Teradata::connect($server, $user, $password);
+
+=head1 BUGS
+
+Please report any bugs or feature requests to C<bug-dbix-puresql@rt.cpan.org>, or
+through the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=DBIx-PureSQL>.
+
+=head1 SEE ALSO
+
+L<SQL::Exec> and L<SQL::Exec::ODBC>
+
+=head1 AUTHOR
+
+Mathias Kende (mathias@cpan.org)
+
+=head1 COPYRIGHT & LICENSE
+
+Copyright 2013 © Mathias Kende.  All rights reserved.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+=cut
 

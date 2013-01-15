@@ -19,7 +19,7 @@ test {
 	SQL::Exec::SQLite::query_one_line('select 42, 5') ~~ [42, 5]
 };
 
-debug {
+test {
 	SQL::Exec::SQLite::query_all_lines('select 1, 2 union select 3, 4') ~~ [[1, 2],[3, 4]]
 };
 

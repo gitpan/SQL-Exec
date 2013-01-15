@@ -1,7 +1,7 @@
 --- #YAML:1.0
 name:               SQL-Exec
-version:            0.01
-abstract:           Functionnal and OO interface to the DBI and DBIx::Connector
+version:            0.02
+abstract:           Simple thread and fork safe database access with functionnal and OO interface
 author:
     - Mathias Kende <mathias@cpan.org>
 license:            perl

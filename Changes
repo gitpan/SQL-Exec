@@ -1,5 +1,10 @@
 Revision history for perl module SQL::Exec
 
- 0.01 2013-01-??
+0.02 2013-01-15
+
+ - Fix typo in the documentation
+ - Improve handling of statements w.r.t. SQLite specificities
+
+0.01 2013-01-14
 
  - Initial release

@@ -11,6 +11,7 @@ t/count.t
 t/export.t
 t/multi_handle.t
 t/simple.t
+t/sqlite.t
 t/table_exists.t
 t/transact.t
 META.yml                                 Module meta-data (added by MakeMaker)

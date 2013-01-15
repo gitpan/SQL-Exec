@@ -3,7 +3,6 @@ use warnings;
 use SQL::Exec::SQLite ':all';
 use Test::Subs;
 
-
 test {
 	connect(':memory:')
 };
@@ -20,7 +19,7 @@ test {
 	query_one_line('select 42, 5') ~~ [42, 5]
 };
 
-debug {
+test {
 	query_all_lines('select 1, 2 union select 3, 4') ~~ [[1, 2],[3, 4]]
 };
 

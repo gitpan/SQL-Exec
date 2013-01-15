@@ -2,11 +2,11 @@ package SQL::Exec::SQLite;
 use strict;
 use warnings;
 use Exporter 'import';
-use SQL::Exec '/.*/', '!connect', '!test_driver';
+use SQL::Exec '/.*/', '!connect';
 
 our @ISA = ('SQL::Exec');
 
-our @EXPORT_OK = ('connect', 'test_driver', @SQL::Exec::EXPORT_OK);
+our @EXPORT_OK = ('test_driver', @SQL::Exec::EXPORT_OK);
 our %EXPORT_TAGS = ( all => \@EXPORT_OK );
 
 sub test_driver {
@@ -58,67 +58,67 @@ SQL::Exec::SQLite - Specific support for the DBD::SQLite DBI driver in SQL::Exec
 
 The C<SQL::Exec::SQLite> package is an extension of the L<C<SQL::Exec>|SQL::Exec>
 package. This mean that in an OO context C<SQL::Exec::SQLite> is a sub-classe
-of C<SQL::Exec> (so all method of the later can be )and an extension
+of C<SQL::Exec> (so all methods of the later can be used in the former). Also, in
+a functionnal context, all functions of C<SQL::Exec> can be accessed through
+C<SQL::Exec::SQLite>.
 
 =head1 CONSTRUCTOR
 
-The C<new> constructor of the 
+  my $c = SQL::Exec->new(file);
+  my $c = SQL::Exec->new(file, opts);
+
+The C<new> constructor of this package takes only a single argument which is the
+name of the file to use as a database. The constructor can also takes an optionnal
+argument wich contains option to apply to the created database handle, either as
+a hash or as a reference to a hash.
+
+The database file is created automatically if it does not already exist. Also
+you may use the special file name C<':memory'> to use a in-memory database. In
+that case, all your data will be destroyed when you close the database handle.
 
 =head1 FUNCTIONS
 
-This is a list of the public function of this library. Functions not listed here
-are for internal use only by this module and should not be used in any external
-code unless .
+The function described here are either functions specific to this database driver
+or special version of a C<SQL::Exec> function adapted for the database driver.
 
-All the functions described below are automatically exported into your package
-except if you explicitely request to opposite with C<use Test::Subs ();>.
-
-Finally, these function must all be called from the top-level and not inside of
-the code of another test function. That is because the library must know the
-number of test before their execution.
+However, all the function of C<SQL::Exec> are accessible in this package, either
+with the object oriented interface or with the functionnal one. This package can
+also exports all the function of the C<SQL::Exec> package and the C<:all> tag
+contains all exportable functions from both C<SQL::Exec> and this package.
 
 =head2 connect
 
-  test { CODE };
-  test { CODE } DESCR;
+  connect(file);
+  $c->connect(file);
 
-This function register a code-block containing a test. During the execution of
-the test, the code will be run and the test will be deemed successful if the
-returned value is C<true>.
+As the L<C<connect>|SQL::Exec/"connect"> function in C<SQL::Exec> this function
+will either connect the default handle of the library or connect a specific
+handle that is already created.
 
-The optionnal C<DESCR> is a string (or an expression returning a string) which
-will be added as a comment to the result of this test. If this string contains
-a C<printf> I<conversion> (e.g. C<%s> or C<%d>) it will be replaced by the result
-of the code block. If the description is omitted, it will be replaced by the
-filename and line number of the test. You can use an empty string C<''> to
-deactivate completely the output of a comment to the test.
+This function takes the same arguments as the C<new> constructor, except that
+the optionnal options hash must be given as a hash reference and that it applies
+only for the duration of the call (this is the same as the
+L<C<connect>|SQL::Exec/"connect"> function in C<SQL::Exec>).
 
-=head2 test
+=head2 test_driver
 
-  todo { CODE };
-  todo { CODE } DESCR;
+  my $t = test_driver();
 
-This function is the same as the function C<test>, except that the test will be
-registered as I<to-do>. So a failure of this test will be ignored when your test
-is run inside a test plan by C<Test::Harness> or C<Tap::Harness>.
+This function returns a boolean value indicating if the C<DBD::SQLite> database
+driver is installed.
 
 =head1 BUGS
 
-Please report any bugs or feature requests to C<bug-dbix-puresql@rt.cpan.org>, or
-through the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=DBIx-PureSQL>.
+Please report any bugs or feature requests to C<bug-sql-exec@rt.cpan.org>, or
+through the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=SQL-Exec>.
 
 =head1 SEE ALSO
 
-L<SQL::Exec>
+For the main documentation of this module ond for a list of all available functions,
+please check the C<L<SQL::Exec>> module.
 
-=head1 AUTHOR
-
-Mathias Kende (mathias@cpan.org)
-
-=head1 VERSION
-
-Version 0.01 (January 2013)
-
+For details about the SQLite database driver, you should check the documentation for
+C<L<DBD::SQLite>>
 
 =head1 COPYRIGHT & LICENSE
 

@@ -7,7 +7,8 @@ use SQL::Exec '/.*/', '!connect';
 
 our @ISA = ('SQL::Exec');
 
-our @EXPORT_OK = ('connect', 'test', 'list_available_DB', @SQL::Exec::EXPORT_OK);
+our @EXPORT_OK = ('list_available_DB', 'test_driver', @SQL::Exec::EXPORT_OK);
+our %EXPORT_TAGS = ( all => \@EXPORT_OK );
 
 sub test_driver {
 	return SQL::Exec::test_driver('ODBC');
@@ -26,13 +27,18 @@ sub list_available_DB {
 # par exemple 'DSN=dcn' (nom enregistré)
 # sinon:  'DBCNAME=hostname' ou 'Host=1.2.3.4;Port=1000;'
 sub build_connect_args {
-	my ($c, $driver, $dsn, $user, $pwd, @opt) = @_;
+	my $c = shift @_;
+	
+	my $driver = shift @_; # this is used as the DSN
 
-	if ($dsn ~~ $c->list_available_DB()) {
-		return ("dbi:ODBC:DSN=$dsn", $user, $password, @opt);
-	} else {
-		return ("dbi:ODBC:DRIVER=${driver};${dsn}", $user, $pwd, @opt);	
+	if ($driver ~~ $c->list_available_DB()) {
+		my ($user, $pwd, @opt) = @_;
+		return ("dbi:ODBC:DSN=$driver", $user, $password, @_);
 	}
+	
+	my ($param, $user, $pwd, @opt) = @_;
+	return ("dbi:ODBC:DRIVER=${driver};${param}", $user, $pwd, @opt);	
+
 }
 
 # Inutile, mais ça permet de ne pas l'oublier
@@ -53,4 +59,40 @@ sub connect {
 
 
 1;
+
+=encoding utf-8
+
+=head1 NAME
+
+SQL::Exec::ODBC - Specific support for the DBD::ODBC DBI driver in SQL::Exec
+
+=head1 SYNOPSIS
+
+  use SQL::Exec::ODBC;
+  
+  SQL::Exec::ODBC::connect($dsn, $user, $password);
+  SQL::Exec::ODBC::connect($driver, $param, $user, $password);
+
+=head1 BUGS
+
+Please report any bugs or feature requests to C<bug-dbix-puresql@rt.cpan.org>, or
+through the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=DBIx-PureSQL>.
+
+=head1 SEE ALSO
+
+L<SQL::Exec>, L<DBD::ODBC> and L<DBD::ODBC::FAQ>
+
+=head1 AUTHOR
+
+Mathias Kende (mathias@cpan.org)
+
+=head1 COPYRIGHT & LICENSE
+
+Copyright 2013 © Mathias Kende.  All rights reserved.
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+
+=cut
+
 

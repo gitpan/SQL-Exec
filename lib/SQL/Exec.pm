@@ -1,5 +1,5 @@
 package SQL::Exec;
-our $VERSION = 0.01;
+our $VERSION = 0.02;
 use strict;
 use warnings;
 use feature 'switch';
@@ -19,7 +19,7 @@ use SQL::SplitStatement;
 
 =head1 NAME
 
-SQL::Exec - Functionnal and OO interface to the DBI and DBIx::Connector
+SQL::Exec - Simple thread and fork safe database access with functionnal and OO interface
 
 =head1 SYNOPSIS
 
@@ -37,19 +37,25 @@ SQL::Exec - Functionnal and OO interface to the DBI and DBIx::Connector
 
 =head2 Main functionnalities
 
-SQL::Exec is (another) interface to the DBI which strive for simplicity. Its main functionalities are:
+SQL::Exec is (another) interface to the DBI which strive for simplicity. Its main
+functionalities are:
 
 =over 4
 
-=item * DBMS independent. The module offers specific support for some DB server but can work with any DBD driver;
+=item * DBMS independent. The module offers specific support for some DB server
+but can work with any DBD driver;
 
 =item * Extremely simple, a query is always only one function or method call;
 
-=item * Everything is as (in)efficient: you choose the function to call based only on the data that you want to get back, not on some supposed performance benefit;
+=item * Everything is as (in)efficient: you choose the function to call based
+only on the data that you want to get back, not on some supposed performance
+benefit;
 
-=item * Supports both OO and functional paradigm with the same interface and functionalities;
+=item * Supports both OO and functional paradigm with the same interface and
+functionalities;
 
-=item * Hides away all DBIism, you do not need to set any options, they are handled by the library with nice defaults;
+=item * Hides away all DBIism, you do not need to set any options, they are
+handled by the library with nice defaults;
 
 =item * Safe: SQL::Exec verify that what happens is what you meant;
 
@@ -63,11 +69,18 @@ SQL::Exec is (another) interface to the DBI which strive for simplicity. Its mai
 
 =back
 
-All this means that SQL::Exec is extremely beginners friendly, it can be used with no advanced knowledge of Perl and code using it can be easily read by people with no knowledge of Perl at all, which is interesting in a mixed environment.
+All this means that SQL::Exec is extremely beginners friendly, it can be used
+with no advanced knowledge of Perl and code using it can be easily read by people
+with no knowledge of Perl at all, which is interesting in a mixed environment.
 
-Also, the fact that SQL::Exec does not try to write SQL for the programmer (this is a feature, not a bug), ease the migration to other tools or languages if a big part of the application logic is written in SQL.
+Also, the fact that SQL::Exec does not try to write SQL for the programmer (this
+is a feature, not a bug), ease the migration to other tools or languages if a big
+part of the application logic is written in SQL.
 
-Thus SQL::Exec is optimal for fast prototyping, for small applications which do not need a full fledged ORM, for migrating SQL code from/to an other environment, etc. It is usable (thanks to C<DBIx::Connector>) in a CGI scripts, in a mod_perl program or in any web framework as the database access layer.
+Thus SQL::Exec is optimal for fast prototyping, for small applications which do
+not need a full fledged ORM, for migrating SQL code from/to an other environment,
+etc. It is usable (thanks to C<DBIx::Connector>) in a CGI scripts, in a mod_perl
+program or in any web framework as the database access layer.
 
 =head1 DESCRIPTION
 
@@ -88,7 +101,7 @@ and method for your RDBMS, additionnal functionnalities, will set specific
 database parameters correctly and will assist you to connect to your desired
 database.
 
-You will find in L</"SUB-CLASSES"> a list of the supported RDBMS and a link to
+You will find in L</"Sub-classes"> a list of the supported RDBMS and a link to
 the documentation of their specific modules.  If your prefered database is not
 listed there, you can still use C<SQL::Exec> directly and get most of its benefits.
 
@@ -279,7 +292,7 @@ reference. If the argument is given it set accordingly the option of the object
 being created. See the L</"set_options"> method for a description of the available
 options.
 
-If your DB has a specific support in a L<sub-classe|/"SUB-CLASSES"> you must
+If your DB has a specific support in a L<sub-classe|/"Sub-classes"> you must
 use its specific constructor to get the additionnal benefits it will offer.
 
 =head2 new_no_connect
@@ -365,7 +378,7 @@ sub build_connect_args {
 # does nothing depending on the current option. It also set the errstr variable.
 sub error {
 	my ($c, $msg, @args) = @_;
-	
+
 	$c->{errstr} = sprintf $msg, @args;
 
 	if ($c->{options}{die_on_error}) {
@@ -620,9 +633,11 @@ sub low_level_fetchrow_arrayref {
 	if (!$row && $c->{last_req}->err) {
 		$c->dbi_error("A row cannot be fetched");
 		return;
+	} elsif (!$row) {
+		return 0;
+	} else {
+		return $row;
 	}
-
-	return $row;
 }
 
 sub low_level_finish {
@@ -642,7 +657,7 @@ sub test_next_row {
 	my ($c) = @_;
 	confess "No statement currently prepared" if $c->{req_over};
 	
-	return $c->{last_req}->fetchrow_array || $c->{last_req}->err
+	return $c->{last_req}->fetchrow_arrayref() || $c->{last_req}->err
 }
 
 my %splitstatement_opt = (
@@ -814,7 +829,7 @@ one will we stored in this variable.
   $c->set_options(HASH);
 
 This function sets the option of the given connection handle (or of the default
-handle). The C<HASH> describing the option may be given as a list of C<option => value>
+handle). The C<HASH> describing the option may be given as a list of C<<option => value>>
 or as a reference to a hash.
 
 The function returns a hash with the previous value of all modified
@@ -860,9 +875,17 @@ functions.
 
 =head3 strict
 
+  set_options(strict => val);
+  strict(val);
+
 =head3 replace
 
+  set_option(replace => \&code);
+  strict(\&code);
+
 =head3 connect_options
+
+Do not use this option...
 
 =head3 auto_split
 
@@ -876,11 +899,17 @@ The spliting facility is provided by the C<SQL::SplitStatement> package.
 
 =head3 auto_transaction
 
+  set_options(auto_transaction => val);
+  auto_transaction(val);
+
 =head3 use_connector
 
 Do not use this option...
 
 =head3 stop_on_error
+
+  set_options(stop_on_error => val);
+  stop_on_error(val);
 
 =cut
 
@@ -1296,17 +1325,23 @@ sub __query_one_value {
 
 	$c->check_conn() or return;
 	$c->low_level_prepare($req) or return;
-	defined $c->low_level_execute() or return;
+	if (not defined $c->low_level_execute())
+	{ 
+		$c->low_level_finish();
+		return;
+	}
+
 	my $row = $c->low_level_fetchrow_arrayref();
+
+	my $tmr = $c->test_next_row() if defined $c->{options}{strict};
+	$c->low_level_finish();
+
 	if (!$row) {
 		return $c->error("Not enough data");
 	} elsif ($#$row < 0) {
 		return $c->error("Not enough column");
 	}
 
-	my $tmr = $c->test_next_row() if defined $c->{options}{strict};
-
-	$c->low_level_finish();
 
 	if (defined  $c->{options}{strict}) {
 		$c->strict_error("To much columns") and return if $#$row > 0;
@@ -1329,9 +1364,13 @@ sub query_one_line {
 
 	$c->check_conn() or return;
 	$c->low_level_prepare($req) or return;
-	defined $c->low_level_execute() or return;
+	if (not defined $c->low_level_execute()) {
+		$c->low_level_finish();
+		return;
+	}
 	my $row = $c->low_level_fetchrow_arrayref();
 	if (!$row) {
+		$c->low_level_finish();
 		return $c->error("Not enough data");
 	}
 
@@ -1359,7 +1398,10 @@ sub query_all_lines {
 
 	$c->check_conn() or return;
 	$c->low_level_prepare($req) or return;
-	defined $c->low_level_execute() or return;
+	if (not defined $c->low_level_execute()) {
+		$c->low_level_finish();
+		return;
+	}
 	
 	my @rows;	
 	while (my $row = $c->low_level_fetchrow_arrayref()) {
@@ -1384,13 +1426,21 @@ sub query_one_column {
 	$c->low_level_prepare($req) or return;
 
 	if ($c->{last_req}->{NUM_OF_FIELDS} < 1) {
+		$c->low_level_finish();
 		return $c->error("Not enough column");
 	}
+
 	if (defined $c->{options}{strict} && $c->{last_req}->{NUM_OF_FIELDS} > 1) {
-		$c->strict_error("To much columns") and return;
+		if ($c->strict_error("To much columns")) {
+			$c->low_level_finish();
+			return;
+		}
 	}
-	
-	defined $c->low_level_execute() or return;
+
+	if (not defined $c->low_level_execute()) {
+		$c->low_level_finish();
+		return;
+	}
 	
 	my @data;
 
@@ -1446,8 +1496,11 @@ sub query_to_file {
 	
 	$c->check_conn() or return;
 	$c->low_level_prepare($req) or return;
-	defined $c->low_level_execute() or return;
-	
+	if (not defined $c->low_level_execute()) {
+		$c->low_level_finish();
+		return;
+	}
+
 	my $count = 0;
 	{
 		local $, = $sep // ';';
@@ -1577,23 +1630,55 @@ sub table_exists {
 
 }
 
-
 $EXPORT_TAGS{'all'} = [ @EXPORT_OK ];
 
 1;
 
 =head1 SUB-CLASSING
 
-TODO: howto...
+The implementation of this library is as generic as possible. However some
+specific functions can be better written for some specific database server and
+some helper function can be easier to use if they are tuned for a single
+database server.
 
-=head2 SUB-CLASSES
+This specific support is provided through sub-classse which extend both the OO
+and the functionnal interface of this library. As stated above, if there is a
+sub-classe for your specific database, you should use it instead of this module,
+otherwise.
 
-L<SQLite|SQL::Exec::SQLite>, L<Oracle|SQL::Exec::Oracle>, L<ODBC|SQL::Exec::ODBC>,
-and L<Teradata|SQL::Exec::ODBC::Teradata>...
+=head2 Sub-classes
+
+The sub-classes currently existing are the following ones:
+
+=over 4
+
+=item * L<SQLite|SQL::Exec::SQLite>: the in-file or in memory database with C<L<DBD::SQLite>>;
+
+=item * L<Oracle|SQL::Exec::Oracle>: access to Oracle database server with C<L<DBD::Oracle>>;
+
+=item * L<ODBC|SQL::Exec::ODBC>: access to any ODBC enabled DBMS through C<L<DBD::ODBC>>;
+
+=item * L<Teradata|SQL::Exec::ODBC::Teradata>: access to a Teradata database with
+the C<ODBC> driver (there is a C<DBD::Teradata> C<DBI> driver using the native
+driver for this database (C<CLI>), but its latest version is not on CPAN, so I
+recommend using the C<ODBC> interface).
+
+=back
+
+If your database of choice is not yet supported, let me know it and I will do my
+best to add a module for it (if the DBMS is freely available) or help you add
+this support (if I cannot have access to an instance of this database server).
+
+In the meantime, C<SQL::Exec> should just work with your database. If that is
+not the case, you should report this as a L<bug|/"BUGS">.
+
+=head2 How to
+
+...
 
 =head1 EXAMPLE
 
-
+Examples would be good.
 
 =head1 CAVEATS
 
@@ -1602,26 +1687,26 @@ Mostly because I have not yet found a I<simple> way to expose this functionnalit
 
 =head1 BUGS
 
-Please report any bugs or feature requests to C<bug-dbix-puresql@rt.cpan.org>, or
-through the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=DBIx-PureSQL>.
+Please report any bugs or feature requests to C<bug-sql-exec@rt.cpan.org>, or
+through the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=SQL-Exec>.
 
 =head1 SEE ALSO
 
 At some point or another you will want to look at the L<DBI> documentation,
 mother of all database manipulation in Perl. You may also want to look at the
-L<DBIx::Connector> and L<SQL::SplitStatement> modules upon which C<SQL::Exec>
+C<L<DBIx::Connector>> and C<L<SQL::SplitStatement>> modules upon which C<SQL::Exec>
 is based.
 
 There is several CPAN module similar to C<SQL::Exec>, I list here only the
 closest (e.g. which does not impose OO upon your code), you should have a look
 at them before deciding to use C<SQL::Exec>:
-L<DBI::Simple>, L<DBIx::Simple>, L<DBIx::DWIW>, L<DBIx::Wrapper>,
-L<DBIx::SimpleGoBetween>, L<DBIx::Sunny>, L<SQL::Executor>.
+C<L<DBI::Simple>>, C<L<DBIx::Simple>>, C<L<DBIx::DWIW>>, C<L<DBIx::Wrapper>>, 
+C<L<DBIx::SimpleGoBetween>>, C<L<DBIx::Sunny>>, C<L<SQL::Executor>>.
 
 Also, C<SQL::Exec> will try its best to enable you to run your SQL code
 in a simple and efficiant way but it will not boil your coffee. You may be
 interested in other packages which may be used to go beyond C<SQL::Exec>
-functionnalities, like L<SQL::Abstract> and L<SQL::Transformer>.
+functionnalities, like C<L<SQL::Abstract>> and C<L<SQL::Transformer>>.
 
 =head1 AUTHOR
 
@@ -1629,7 +1714,7 @@ Mathias Kende (mathias@cpan.org)
 
 =head1 VERSION
 
-Version 0.01 (January 2013)
+Version 0.02 (January 2013)
 
 
 =head1 COPYRIGHT & LICENSE

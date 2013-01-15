@@ -2,11 +2,12 @@ package SQL::Exec::Oracle;
 use strict;
 use warnings;
 use Exporter 'import';
-use SQL::Exec '/.*/', '!connect';
+use SQL::Exec '/.*/', '!connect', '!table_exists';
 
 our @ISA = ('SQL::Exec');
 
-our @EXPORT_OK = ('connect', 'test', @SQL::Exec::EXPORT_OK);
+our @EXPORT_OK = ('test_driver', @SQL::Exec::EXPORT_OK);
+our %EXPORT_TAGS = ( all => \@EXPORT_OK );
 
 sub test_driver {
 	return SQL::Exec::test_driver('Oracle');
@@ -72,61 +73,13 @@ select 'drop package ' || object_name from user_procedures where object_type = '
 
 =head1 NAME
 
-SQL::Exec::Oracel - Specific support for the DBD::SQLite DBI driver in SQL::Exec
+SQL::Exec::Oracle - Specific support for the DBD::Oracle DBI driver in SQL::Exec
 
 =head1 SYNOPSIS
 
-  use SQL::Exec::SQLite;
+  use SQL::Exec::Oracle;
   
-  SQL::Exec::SQLite::connect('/tmp/my.db');
-
-=head1 DESCRIPTION
-
-The C<SQL::Exec::SQLite> package is an extension of the L<C<SQL::Exec>|SQL::Exec>
-package. This mean that in an OO context C<SQL::Exec::SQLite> is a sub-classe
-of C<SQL::Exec> (so all method of the later can be )and an extension
-
-=head1 CONSTRUCTOR
-
-The C<new> constructor of the 
-
-=head1 FUNCTIONS
-
-This is a list of the public function of this library. Functions not listed here
-are for internal use only by this module and should not be used in any external
-code unless .
-
-All the functions described below are automatically exported into your package
-except if you explicitely request to opposite with C<use Test::Subs ();>.
-
-Finally, these function must all be called from the top-level and not inside of
-the code of another test function. That is because the library must know the
-number of test before their execution.
-
-=head2 connect
-
-  test { CODE };
-  test { CODE } DESCR;
-
-This function register a code-block containing a test. During the execution of
-the test, the code will be run and the test will be deemed successful if the
-returned value is C<true>.
-
-The optionnal C<DESCR> is a string (or an expression returning a string) which
-will be added as a comment to the result of this test. If this string contains
-a C<printf> I<conversion> (e.g. C<%s> or C<%d>) it will be replaced by the result
-of the code block. If the description is omitted, it will be replaced by the
-filename and line number of the test. You can use an empty string C<''> to
-deactivate completely the output of a comment to the test.
-
-=head2 test
-
-  todo { CODE };
-  todo { CODE } DESCR;
-
-This function is the same as the function C<test>, except that the test will be
-registered as I<to-do>. So a failure of this test will be ignored when your test
-is run inside a test plan by C<Test::Harness> or C<Tap::Harness>.
+  SQL::Exec::Oracle::connect($server, $instance, $user, $password);
 
 =head1 BUGS
 
@@ -140,11 +93,6 @@ L<SQL::Exec>
 =head1 AUTHOR
 
 Mathias Kende (mathias@cpan.org)
-
-=head1 VERSION
-
-Version 0.01 (January 2013)
-
 
 =head1 COPYRIGHT & LICENSE
 
