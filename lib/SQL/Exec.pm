@@ -1,5 +1,5 @@
 package SQL::Exec;
-our $VERSION = 0.02;
+our $VERSION = 0.03;
 use strict;
 use warnings;
 use feature 'switch';
@@ -112,7 +112,12 @@ Do not hesitate to ask for (or propose) a module for your database of choice.
 Each function of this library (that is everything described below except C<new>
 and C<new_no_connect> which are only package method) may be exported on request.
 
-There is also a C<':all'> tag to get everything at once.
+There is also a C<':all'> tag to get everything at once. Just do :
+
+  use SQL::Exec ':all';
+
+at the beginning of your file to all the power of C<SQL::Exec> with an overhead
+as small as possible.
 
 =cut
 
@@ -858,25 +863,60 @@ functions.
   set_options(die_on_error => val);
   die_on_error(val);
 
+This option (which default to I<true>) specify if an error condition abort the
+execution of your program or not. If so, the C<croak> function will be called
+(and you may trap the error with C<eval>). If not, the function call will still
+abort and return C<undef> or an empty list (depending on the context). When this
+may be a valid result for the function, you may call the C<L<errstr|/"errstr">> function/method
+to get the last error message or C<undef> if the last call was succesful.
+
 =head3 print_error
 
   set_options(print_error => val);
   print_error(val);
+
+This option (which default to I<true>) control whether the errors are printed or
+not (this does not depend on the setting of the C<die_on_error> option). If the
+supplied value is I<true> the errors are printed to C<STDERR>, otherwise nothing
+is printed.
 
 =head3 print_warning
 
   set_options(print_warning => val);
   print_warning(val);
 
+This option (which default to I<true>) control whether the warning are printed
+or not. If the supplied value is I<true> the warnings are printed to C<STDERR>,
+otherwise nothing is printed.
+
 =head3 print_query
 
   set_options(print_query => FH);
   print_query(FH);
 
+This option (which default to C<undef>) control whether the queries are printed
+before being executed. Unless the previous option, to set it, you must pass it
+an open I<file handle>. The queries will then be printed to this handle.
+
 =head3 strict
 
   set_options(strict => val);
   strict(val);
+
+This option (which default to I<true>) control the so-called C<strict> mode of
+the library. It has 3 possible settings. If set to a I<true> value, some condition
+are checked to ensure that the operations of the library are as safe as possible
+(the exact condition are described in the documentation of the function to which
+they apply). When the condition are not met, an error is thrown (what happens
+exactly depends on the C<die_on_error> and C<print_error> options).
+
+If this option is set to a I<defined> I<false> value (such as C<'0'>), then the
+strict conditions are still tested, but only result in a warning when they are
+not met.
+
+Finally, if this option is set to C<undef> then the nothing happens when a strict
+condition is not met (and the tests will altogether be omitted if they are
+potentially costly).
 
 =head3 replace
 
@@ -889,11 +929,12 @@ Do not use this option...
 
 =head3 auto_split
 
-This option control whether the queries are split in atomic statement before being
-sent to the database. This option default to I<true>. If it is not set, your
+This option (which default to I<true>) controls whether the queries are split in
+atomic statement before being sent to the database. If it is not set, your
 queries will be sent I<as-is> to the database, with their ending terminator (if
-any), etc. You should not set this option to some I<false> value unless you know
-what you are doing.
+any), this may result in error with some database driver which do not allow for
+multi-statement queries. You should not set this option to a I<false> value
+unless you know what you are doing.
 
 The spliting facility is provided by the C<SQL::SplitStatement> package.
 
@@ -901,6 +942,8 @@ The spliting facility is provided by the C<SQL::SplitStatement> package.
 
   set_options(auto_transaction => val);
   auto_transaction(val);
+
+This option (which default to I<true>) 
 
 =head3 use_connector
 
@@ -1676,7 +1719,7 @@ not the case, you should report this as a L<bug|/"BUGS">.
 
 ...
 
-=head1 EXAMPLE
+=head1 EXAMPLES
 
 Examples would be good.
 
@@ -1714,12 +1757,12 @@ Mathias Kende (mathias@cpan.org)
 
 =head1 VERSION
 
-Version 0.02 (January 2013)
+Version 0.03 (January 2013)
 
 
 =head1 COPYRIGHT & LICENSE
 
-Copyright 2012 © Mathias Kende.  All rights reserved.
+Copyright 2013 © Mathias Kende.  All rights reserved.
 
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

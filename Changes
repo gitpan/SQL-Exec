@@ -1,4 +1,8 @@
-Revision history for perl module SQL::Exec
+Revision history for Perl module SQL::Exec
+
+0.03 2013-01-22
+
+ - add documentation for the options
 
 0.02 2013-01-15
 
