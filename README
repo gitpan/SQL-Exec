@@ -91,8 +91,8 @@ DESCRIPTION
 
       use SQL::Exec ':all';
 
-    at the beginning of your file to all the power of "SQL::Exec" with an
-    overhead as small as possible.
+    at the beginning of your file to get all the power of "SQL::Exec" with
+    an overhead as small as possible.
 
 CONSTRUCTORS/DESTRUCTORS
     If you want to use this library in an object oriented way (or if you
@@ -327,7 +327,43 @@ GETTER/SETTER AND OPTIONS
 
    replace
       set_option(replace => \&code);
-      strict(\&code);
+      replace(\&code);
+      replace($obj);
+      replace(HASH);
+      replace(undef);
+
+    This option allows to set up a procedure which get the possibility to
+    modify an SQL query before it is executed (e.g. to replace generic
+    parameter by specific name). The default (when the option is "undef") is
+    that nothing is done.
+
+    If this option is a *CODE* reference (or an anonymous sub-function),
+    then this function is called each time you supply an SQL query to this
+    library with the query in the $_ variable. The function may modify this
+    variable and the resulting value of $_ is executed. The call to this
+    function takes place before the spliting of the SQL query (if
+    "auto_split" is *true*).
+
+    You may also pass to this option a *HASH* reference. In that case, the
+    hash describes a series of replacement to be performed on the SQL query
+    (see the example below). Internally, this requires the "String::Replace"
+    library. The function will croak if you call it with a *HASH* and you do
+    not have this library installed. When using the "replace" function
+    (rather than the "set_options" function) you may give a list descibing a
+    *HASH*, rather than a *HASH* reference.
+
+    Finally, you may also give to this function any object which have a
+    "replace" method (e.g. an already built "String::Replace" object). This
+    method will then be called with your SQL queries (using arguments and
+    return values, and not the $_ variable).
+
+    Here is an example (which will work with an SQLite database):
+
+      replace(String::Replace->new(table_name => 't'));
+      execute('create table table_name (a)');
+      replace(table_name => 't');
+      execute('insert into table_name values (1)');
+      query_one_value('select * from table_name', { replace => sub { s/table_name/t/g } }) == 1
 
    connect_options
     Do not use this option...
@@ -346,7 +382,9 @@ GETTER/SETTER AND OPTIONS
       set_options(auto_transaction => val);
       auto_transaction(val);
 
-    This option (which default to *true*)
+    This option (which default to *true*) controls whether the "execute" and
+    "execute_multiple" functions automatically start a transaction whenever
+    they execute more than one statement.
 
    use_connector
     Do not use this option...
@@ -354,6 +392,11 @@ GETTER/SETTER AND OPTIONS
    stop_on_error
       set_options(stop_on_error => val);
       stop_on_error(val);
+
+    This option is only usefull when the "die_on_error" and "strict_error"
+    options are false and will control if the execution is interupted when
+    an error occurs during a multi-statement query. Its default value is
+    *true*.
 
     sub set_option { my $c = &get_handle;
 
@@ -372,8 +415,17 @@ STANDARD QUERY FUNCTIONS
     first split at the boundary of each statement that it contains (except
     if the "auto_split" option is false) and is then executed statement by
     statement in a single transaction (meaning that if one of the statement
-    fails, nothing is changed in your database), except if the
-    "auto_transaction" option is false.
+    fails, nothing is changed in your database). If the "auto_transaction"
+    option is false, each of your statement will be executed atomically and
+    all modification will be recorded immediately.
+
+    Optionnaly, you may also provide a reference to an array of SQL queries
+    instead of a single SQL query. In that case, each query will be split
+    independently (if "auto_split" is true) and all the resulting queries
+    will be executed in order inside one single transaction (if
+    "auto_transaction" is true). Note that you may not pass a list of SQL
+    query, but only a reference to such a list (for compatibility with a
+    future version of the library).
 
     The function will return a "defined" value if everything succeeded, and
     "undef" if an error happen (and it is ignored, otherwise, the function
@@ -381,6 +433,52 @@ STANDARD QUERY FUNCTIONS
 
     The returned value may or may not be the total number of lines modified
     by your query.
+
+    Here are examples of valid call to the "execute" function:
+
+      execute('insert into t values (1)');
+      execute('insert into t values (1);insert into t values (1)');
+      execute(['insert into t values (1)', 'insert into t values (1)']);
+
+  execute_multiple
+      execute_multiple(SQL, PARAM_LIST);
+      $c->execute_multiple(SQL, PARAM_LIST);
+
+    This function executes one or multiple time an SQL query with the
+    provided parameters. The SQL query may be only a single statement
+    (although this condition is not tested if "auto_split" is false, but
+    then there is no garantee on what will happen).
+
+    The SQL query can contain placeholder ('?' characters) in place of SQL
+    values. These placeholder will be replaced during the execution by the
+    parameters that you provide. You should provide a list of parameters
+    with the same number of parameters than the number of placeholder in the
+    statement. You may provide this list as an array or an array reference.
+
+    You may also provide a list of array reference or a reference to an
+    array of array reference. In that case, the query will be executed once
+    for each element of this array (the external one), with the placeholders
+    taking the values given in the sub-arrays.
+
+    As a special case, if there is only a single placeholder in your query,
+    you may provide a simple list of parameters to execute the query
+    multiple time (each with one of the parameter).
+
+    If the "auto_transaction" option is true, then all the executions of
+    your query will be performed atomically inside a single transaction.
+    This is usefull for example to performs many insertions in a table in an
+    efficient manner.
+
+    Here are three pairs of equivalent call to "execute_multiple":
+
+      execute_multiple('insert into t values (?, ?)', 1, 2);
+      execute_multiple('insert into t values (?, ?)', [1, 2]);
+  
+      execute_multiple('insert into t values (?, ?)', [1, 2], [3, 4]);
+      execute_multiple('insert into t values (?, ?)', [[1, 2], [3, 4]]);
+  
+      execute_multiple('insert into t values (?)', 1, 2, 3);
+      execute_multiple('insert into t values (?)', [[1], [2], [3]]);
 
   query_one_value
       my $v = query_one_value(SQL);
@@ -586,7 +684,7 @@ AUTHOR
     Mathias Kende (mathias@cpan.org)
 
 VERSION
-    Version 0.03 (January 2013)
+    Version 0.04 (January 2013)
 
 COPYRIGHT & LICENSE
     Copyright 2013 © Mathias Kende. All rights reserved.

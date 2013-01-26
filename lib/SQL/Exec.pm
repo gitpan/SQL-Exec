@@ -1,5 +1,5 @@
 package SQL::Exec;
-our $VERSION = 0.03;
+our $VERSION = 0.04;
 use strict;
 use warnings;
 use feature 'switch';
@@ -116,7 +116,7 @@ There is also a C<':all'> tag to get everything at once. Just do :
 
   use SQL::Exec ':all';
 
-at the beginning of your file to all the power of C<SQL::Exec> with an overhead
+at the beginning of your file to get all the power of C<SQL::Exec> with an overhead
 as small as possible.
 
 =cut
@@ -139,6 +139,8 @@ as small as possible.
 our @EXPORT_OK = ();
 # every thing is put in ':all' at the end of the file.
 our %EXPORT_TAGS = ();
+
+our @CARP_NOT = ('DBIx::Connector');
 
 # The structure of a SQL::Exec object, this hash is never made an object but
 # it is copied by get_empty whenever a new object must be created.
@@ -436,12 +438,20 @@ sub strict_error {
 sub format_dbi_error {
 	my ($c, $msg, @args) = @_;
 	
-	my $dbh = $c->{db_con}->dbh();
-	my $errstr = $dbh->errstr // '';
-	my $err = $dbh->err // '0';
-	my $state = $dbh->state // '0'; # // pour la coloration syntaxique de Gedit
+	# TODO: corriger ça si on n'utilise pas DBIx::Connector
+	my ($errstr, $err, $state);
+	if ($c->{db_con}) {
+		my $dbh = $c->{db_con}->dbh();
+		$errstr = $dbh->errstr // '';
+		$err = $dbh->err // '0';
+		$state = $dbh->state // '0'; # // pour la coloration syntaxique de Gedit
+	} else {
+		$errstr = $DBI::errstr // '';
+		$err = $DBI::err // '0';
+		$state = $DBI::state // '0'; # // pour la coloration syntaxique de Gedit
+	}
 	my $err_msg = "Error during the execution of the following request:\n\t".$c->{last_req_str}."\n";
-	$err_msg .= "Error: $msg\n\t Error Code: $err\n\t Error Message: $errstr\n\t State: $state";
+	$err_msg .= "Error: $msg\n\t Error Code: $err\n\t Error Message: $errstr\n\t State: $state\n";
 
 	return $err_msg;
 }
@@ -450,7 +460,7 @@ sub format_dbi_error {
 sub dbi_error {
 	my ($c, $msg, @args) = @_;
 
-	$c->error($c->format_dbi_error($msg,@args));
+	$c->error($c->format_dbi_error($msg.' ',@args));
 
 	return;
 }
@@ -460,7 +470,8 @@ sub __replace {
 
 	my $r = $c->{options}{replace};
 	if ($r && reftype($r) eq 'CODE') {
-		$str = eval { $r->($str) };
+		local $_ = $str;
+		$str = eval { $r->(); $_ };
 		return $c->error("A call to the replace procedure has failed with: $@") if $@;
 	} elsif ($r and blessed($_[0]) and $_[0]->can('replace')) {
 		$str = eval { $r->replace($str) };
@@ -552,22 +563,30 @@ sub __connect {
 		$c->query("login to ${con_str} with user ${usr}");
 	}
 	
+	my @l = DBI->parse_dsn($con_str);
+	if (not @l or not $l[1]) {
+		$c->error("Cannot connect with an invalid connection string");
+		return;
+	}
+	
 	my $con_opt = $c->{options}{connect_options} // { $c->get_default_connect_option() }; # //
 	
 	if ($c->{options}{use_connector}) {
 		$c->{db_con} = DBIx::Connector->new($con_str, $user, $pwd, $con_opt);
+		if (!$c->{db_con}) {
+			$c->dbi_error("Cannot connect to the database");
+			return;
+		}	
 		$c->{db_con}->disconnect_on_destroy(1);
 		$c->{db_con}->mode('fixup');
 	} else {
 		$c->{db_con} = DBI->connect($con_str, $user, $pwd, $con_opt);
+		if (!$c->{db_con}) {
+			$c->dbi_error("Cannot connect to the database");
+			return;
+		}	
 	}
 
-	if (!$c->{db_con}) {
-		$c->error("Cannot connect to the database");
-		return;
-	}	
-
-	
 	$c->{is_connected} = 1;
 	return 1;
 }
@@ -609,6 +628,21 @@ sub low_level_prepare {
 	}
 	$c->{last_req} = $req;
 	$c->{req_over} = 0;
+	return 1;
+}
+
+sub low_level_bind {
+	my $c = shift;
+
+	my $i = 0;
+	for (@_) {
+		#TODO: gérer les différents type de paramètres
+		if (not $c->{last_req}->bind_param(++$i, $_)) {
+			$c->dbi_error("Cannot bind the parameters");
+			return;
+		}
+	}
+
 	return 1;
 }
 
@@ -921,7 +955,41 @@ potentially costly).
 =head3 replace
 
   set_option(replace => \&code);
-  strict(\&code);
+  replace(\&code);
+  replace($obj);
+  replace(HASH);
+  replace(undef);
+
+This option allows to set up a procedure which get the possibility to modify
+an SQL query before it is executed (e.g. to replace generic parameter by specific
+name). The default (when the option is C<undef>) is that nothing is done.
+
+If this option is a I<CODE> reference (or an anonymous sub-function), then this
+function is called each time you supply an SQL query to this library with the
+query in the C<$_> variable. The function may modify this variable and the
+resulting value of C<$_> is executed. The call to this function takes place before
+the spliting of the SQL query (if C<auto_split> is I<true>).
+
+You may also pass to this option a I<HASH> reference. In that case, the hash
+describes a series of replacement to be performed on the SQL query (see the
+example below). Internally, this requires the C<L<String::Replace>> library.
+The function will croak if you call it with a I<HASH> and you do not have this
+library installed. When using the C<replace> function (rather than the
+C<set_options> function) you may give a list descibing a I<HASH>, rather than a
+I<HASH> reference.
+
+Finally, you may also give to this function any object which have a C<replace>
+method (e.g. an already built C<String::Replace> object). This method will then
+be called with your SQL queries (using arguments and return values, and not the
+C<$_> variable).
+
+Here is an example (which will work with an SQLite database):
+
+  replace(String::Replace->new(table_name => 't'));
+  execute('create table table_name (a)');
+  replace(table_name => 't');
+  execute('insert into table_name values (1)');
+  query_one_value('select * from table_name', { replace => sub { s/table_name/t/g } }) == 1
 
 =head3 connect_options
 
@@ -943,7 +1011,9 @@ The spliting facility is provided by the C<SQL::SplitStatement> package.
   set_options(auto_transaction => val);
   auto_transaction(val);
 
-This option (which default to I<true>) 
+This option (which default to I<true>) controls whether the C<execute> and
+C<execute_multiple> functions automatically start a transaction whenever they
+execute more than one statement.
 
 =head3 use_connector
 
@@ -953,6 +1023,10 @@ Do not use this option...
 
   set_options(stop_on_error => val);
   stop_on_error(val);
+
+This option is only usefull when the C<die_on_error> and C<strict_error> options
+are false and will control if the execution is interupted when an error occurs
+during a multi-statement query. Its default value is I<true>.
 
 =cut
 
@@ -1050,6 +1124,14 @@ sub replace {
 			} else {
 				return $c->error('The String::Replace module is needed to handle HASH ref as argument to replace');
 			}
+		} elsif (not ref $_[0] and not @_ & 1) {
+			if (eval { require String::Replace }) {
+				my $v = eval { String::Replace->new(@_) };
+				return $c->error("Creating a String::Replace object has failed: $@") if $@;
+				$c->{options}{replace} = $v;
+			} else {
+				return $c->error('The String::Replace module is needed to handle HASH ref as argument to replace');
+			}		
 		} else {
 			return $c->error('Invalid argument to replace, expexted an object or HASH or CODE ref');
 		}
@@ -1198,14 +1280,68 @@ sub set_option {
 This function execute the SQL code contained in its argument. The SQL is first
 split at the boundary of each statement that it contains (except if the C<auto_split>
 option is false) and is then executed statement by statement in a single transaction
-(meaning that if one of the statement fails, nothing is changed in your database),
-except if the C<auto_transaction> option is false.
+(meaning that if one of the statement fails, nothing is changed in your database).
+If the C<auto_transaction> option is false, each of your statement will be executed
+atomically and all modification will be recorded immediately.
+
+Optionnaly, you may also provide a reference to an array of SQL queries instead
+of a single SQL query. In that case, each query will be split independently (if
+C<auto_split> is true) and all the resulting queries will be executed in order
+inside one single transaction (if C<auto_transaction> is true). Note that you
+may not pass a list of SQL query, but only a reference to such a list (for
+compatibility with a future version of the library).
 
 The function will return a C<defined> value if everything succeeded, and C<undef>
 if an error happen (and it is ignored, otherwise, the function will C<croak>).
 
 The returned value may or may not be the total number of lines modified by your
 query.
+
+Here are examples of valid call to the C<execute> function:
+
+  execute('insert into t values (1)');
+  execute('insert into t values (1);insert into t values (1)');
+  execute(['insert into t values (1)', 'insert into t values (1)']);
+
+=head2 execute_multiple
+
+  execute_multiple(SQL, PARAM_LIST);
+  $c->execute_multiple(SQL, PARAM_LIST);
+
+This function executes one or multiple time an SQL query with the provided
+parameters. The SQL query may be only a single statement (although this
+condition is not tested if C<auto_split> is false, but then there is no
+garantee on what will happen).
+
+The SQL query can contain placeholder (C<'?'> characters) in place of SQL values.
+These placeholder will be replaced during the execution by the parameters that
+you provide. You should provide a list of parameters with the same number of
+parameters than the number of placeholder in the statement. You may provide this
+list as an array or an array reference.
+
+You may also provide a list of array reference or a reference to an array of
+array reference. In that case, the query will be executed once for each element
+of this array (the external one), with the placeholders taking the values given
+in the sub-arrays.
+
+As a special case, if there is only a single placeholder in your query, you may
+provide a simple list of parameters to execute the query multiple time (each
+with one of the parameter).
+
+If the C<auto_transaction> option is true, then all the executions of your query
+will be performed atomically inside a single transaction. This is usefull for
+example to performs many insertions in a table in an efficient manner.
+
+Here are three pairs of equivalent call to C<execute_multiple>:
+
+  execute_multiple('insert into t values (?, ?)', 1, 2);
+  execute_multiple('insert into t values (?, ?)', [1, 2]);
+  
+  execute_multiple('insert into t values (?, ?)', [1, 2], [3, 4]);
+  execute_multiple('insert into t values (?, ?)', [[1, 2], [3, 4]]);
+  
+  execute_multiple('insert into t values (?)', 1, 2, 3);
+  execute_multiple('insert into t values (?)', [[1], [2], [3]]);
 
 =head2 query_one_value
 
@@ -1312,14 +1448,19 @@ This function...
 
 
 push @EXPORT_OK, ('execute', 'query_one_value', 'query_one_line', 'query_all_lines',
-				'query_one_column', 'query_to_file');
+				'query_one_column', 'query_to_file', 'execute_multiple');
 
 
 sub execute {
 	my $c = &check_options or return;
 
 	$c->check_conn() or return;
-	my @queries = $c->split_query($_[0]);
+	my @queries;
+	if ($_[0] and ref $_[0] and reftype $_[0] eq 'ARRAY') {
+		@queries = map { $c->split_query($_) } @{$_[0]};
+	} else {
+		@queries = $c->split_query($_[0]);
+	}
 	
 	my $proc = sub {
 			my $a = 0;
@@ -1345,11 +1486,78 @@ sub execute {
 		};
 
 	my $v;
+	if ($c->{options}{auto_transaction} && @queries > 1) {
+		$v = eval { $c->{db_con}->txn($proc) };
+	} else {
+		$v = eval { $proc->() };
+	}
+	if ($@ =~ m/^EINT$/) {
+		return;
+	} elsif ($@ =~ m/^ESTOP:(\d+)$/) {
+		return $c->{options}{auto_transaction} && @queries > 1 ? 0 : $1;
+	} elsif ($@) {
+		die $@;
+	} else {
+		return $v;
+	}
+}
+
+sub execute_multiple {
+	my $c = &check_options or return;
+
+	$c->check_conn() or return;
+	my $req = $c->get_one_query(shift @_);
+	my ($param, $d1);
+	if (not @_ or not ref $_[0]) {
+		$param = [ \@_ ];
+		$d1 = 1;
+	} elsif (reftype($_[0]) eq 'ARRAY' and (not @{$_[0]} or not ref $_[0][0])) {
+		$param = [ @_ ];
+	} elsif (reftype($_[0]) eq 'ARRAY' and reftype($_[0][0]) eq 'ARRAY') {
+		$param = $_[0];
+	} else {
+		$c->error('Invalid argument geometry');
+	}
+
+	my $proc = sub {
+			my $a = 0;
+
+			if (!$c->low_level_prepare($req)) {
+				die "EINT\n";
+			}
+			
+			if ($c->{last_req}->{NUM_OF_PARAMS} == 1 and $d1) {
+				$param = [ map { [ $_ ] } @{$param->[0]} ];
+			}
+
+			for my $p (@{$param}) {
+			# TODO: lever l'erreur strict seulement dans le mode stop_on_error
+			# et s'il reste des requête à exécuter.
+				if (not $c->low_level_bind(@{$p})) {
+					#$c->low_level_finish();
+					$c->strict_error("The query has not been executed for all value due to an error") and die "EINT\n";
+					die "ESTOP:$a\n" if $c->{options}{stop_on_error};
+					next;
+				}
+				my $v = $c->low_level_execute();
+				#$c->low_level_finish();
+				if (not defined $v) {
+					$c->strict_error("The query has not been executed for all value due to an error") and die "EINT\n";
+					die "ESTOP:$a\n" if $c->{options}{stop_on_error};
+					next;
+				}
+				$a += $v;
+			}
+			return $a;
+		};
+
+	my $v;
 	if ($c->{options}{auto_transaction}) {
 		$v = eval { $c->{db_con}->txn($proc) };
 	} else {
 		$v = eval { $proc->() };
 	}
+	$c->low_level_finish() unless $c->{req_over}; # ???
 	if ($@ =~ m/^EINT$/) {
 		return;
 	} elsif ($@ =~ m/^ESTOP:(\d+)$/) {
@@ -1757,7 +1965,7 @@ Mathias Kende (mathias@cpan.org)
 
 =head1 VERSION
 
-Version 0.03 (January 2013)
+Version 0.04 (January 2013)
 
 
 =head1 COPYRIGHT & LICENSE

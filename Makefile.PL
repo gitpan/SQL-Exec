@@ -15,6 +15,7 @@ WriteMakefile(
 		BUILD_REQUIRES => {
 				'Test::Subs' => 0,
 				'DBD::SQLite' => 0,
+				'String::Replace' => 0,
 			},
 		PREREQ_PM => {
 				'Exporter' => 0,

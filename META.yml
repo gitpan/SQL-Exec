@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               SQL-Exec
-version:            0.03
+version:            0.04
 abstract:           Simple thread and fork safe database access with functionnal and OO interface
 author:
     - Mathias Kende <mathias@cpan.org>
@@ -9,8 +9,9 @@ distribution_type:  module
 configure_requires:
     ExtUtils::MakeMaker:  6.3002
 build_requires:
-    DBD::SQLite:  0
-    Test::Subs:   0
+    DBD::SQLite:      0
+    String::Replace:  0
+    Test::Subs:       0
 requires:
     Carp:                 0
     DBI:                  0

@@ -1,5 +1,12 @@
 Revision history for Perl module SQL::Exec
 
+0.04 2013-01-26
+
+ - Fix typo in the documentation
+ - Add the execute_multiple functions
+ - Better error reporting in conjonction with DBIx::Connector
+ - Check the validity of the connection string for better error messages
+
 0.03 2013-01-22
 
  - add documentation for the options
