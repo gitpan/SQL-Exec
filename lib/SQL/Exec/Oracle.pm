@@ -34,6 +34,11 @@ sub get_default_connect_option {
 sub connect {
 	my $c = &SQL::Exec::check_options;
 
+	if (test_driver()) {
+		$c->error("You must install the DBD::Oracle Perl module");
+		return;
+	}
+
 	if (not $c->isa(__PACKAGE__)) {
 		bless $c, __PACKAGE__;
 	}

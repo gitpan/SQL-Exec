@@ -215,9 +215,31 @@ GETTER/SETTER AND OPTIONS
       my $h = get_default_handle();
 
     Return the default handle of the library (the one used by all function
-    when not applied on an object). The returned handle may then be used as
-    any other handle through the OO interface, but it will still be used by
-    the functionnal interface of this library.
+    when not applied on an object). The returned handle is an "SQL::Exec"
+    object and may then be used as any other handles through the OO
+    interface, but it will still be used by the functionnal interface of
+    this library.
+
+  get_dbh
+      my $dbh = get_dbh();
+      my $dbh = $h->get_dbh();
+
+    Returns the internal "DBI" handle to your database. This handle may be
+    used in conjonction with other libraries which can accept a connected
+    handle.
+
+    Note that, because of the use of "DBIx::Connector", this handle may
+    change during the life of your program. If possible, you should rather
+    use the "get_conn" method (see below) to get a persistant handle.
+
+  get_conn
+      my $conn = get_conn();
+      my $conn = $h->get_conn();
+
+    Returns the internal "DBIx::Connector" handle to your database. This
+    handle may be used in conjonction with other libraries which can accept
+    such a handle (e.g. "DBIx::Lite"). This handle will not change while you
+    do not close your connection to your database.
 
   errstr
       my $e = errstr();
@@ -584,6 +606,22 @@ STANDARD QUERY FUNCTIONS
 
     This function...
 
+  query_to_file
+      query_to_file(SQL, file_name, separator, new_line);
+      my $v = $h->query_one_value(SQL, file_name, separator, new_line);
+      query_to_file(SQL, FH, separator, new_line);
+
+    This function execute an SQL query and send its output to a file or file
+    handle.
+
+    The first argument is the query to execute (which may contain only a
+    single statement).
+
+    The second argument is the destination of th data. You may pass either a
+    file name or a reference to an *IO* or *GLOB*. If it is omitted the data
+    will go to "STDOUT". If you pass a filename, you may prefix it with
+    "<<'">'>>> to append to the file (rather that to erase it).
+
 HIGH LEVEL QUERY FUNCTIONS
     These functions (or method) provide higher level interface to the
     database. The implemetations provided here try to be generic and
@@ -627,11 +665,11 @@ SUB-CLASSING
   Sub-classes
     The sub-classes currently existing are the following ones:
 
-    *   SQLite: the in-file or in memory database with "DBD::SQLite";
+    *   SQLite: the in-file or in memory database with DBD::SQLite;
 
-    *   Oracle: access to Oracle database server with "DBD::Oracle";
+    *   Oracle: access to Oracle database server with DBD::Oracle;
 
-    *   ODBC: access to any ODBC enabled DBMS through "DBD::ODBC";
+    *   ODBC: access to any ODBC enabled DBMS through DBD::ODBC;
 
     *   Teradata: access to a Teradata database with the "ODBC" driver
         (there is a "DBD::Teradata" "DBI" driver using the native driver for
@@ -653,9 +691,8 @@ EXAMPLES
     Examples would be good.
 
 CAVEATS
-    There is currently no support for placeholders (named or positional) in
-    queries. Mostly because I have not yet found a *simple* way to expose
-    this functionnality.
+    There is currently no support for prepared statements and placeholders
+    bayond what is exposed in the "execute_multiple" function.
 
 BUGS
     Please report any bugs or feature requests to
@@ -665,26 +702,25 @@ BUGS
 SEE ALSO
     At some point or another you will want to look at the DBI documentation,
     mother of all database manipulation in Perl. You may also want to look
-    at the "DBIx::Connector" and "SQL::SplitStatement" modules upon which
-    "SQL::Exec" is based.
+    at the DBIx::Connector and SQL::SplitStatement modules upon which
+    SQL::Exec is based.
 
-    There is several CPAN module similar to "SQL::Exec", I list here only
-    the closest (e.g. which does not impose OO upon your code), you should
-    have a look at them before deciding to use "SQL::Exec": "DBI::Simple",
-    "DBIx::Simple", "DBIx::DWIW", "DBIx::Wrapper", "DBIx::SimpleGoBetween",
-    "DBIx::Sunny", "SQL::Executor".
+    There is several CPAN module similar to SQL::Exec, I list here only the
+    closest (e.g. which does not impose OO upon your code), you should have
+    a look at them before deciding to use SQL::Exec: DBI::Simple,
+    DBIx::Simple, DBIx::DWIW, "DBIx::Wrapper", DBIx::SimpleGoBetween,
+    DBIx::Sunny, "SQL::Executor".
 
-    Also, "SQL::Exec" will try its best to enable you to run your SQL code
-    in a simple and efficiant way but it will not boil your coffee. You may
-    be interested in other packages which may be used to go beyond
-    "SQL::Exec" functionnalities, like "SQL::Abstract" and
-    "SQL::Transformer".
+    Also, SQL::Exec will try its best to enable you to run your SQL code in
+    a simple and efficiant way but it will not boil your coffee. You may be
+    interested in other packages which may be used to go beyond SQL::Exec
+    functionnalities, like SQL::Abstract, DBIx::Lite, and SQL::Translator.
 
 AUTHOR
     Mathias Kende (mathias@cpan.org)
 
 VERSION
-    Version 0.04 (January 2013)
+    Version 0.05 (January 2013)
 
 COPYRIGHT & LICENSE
     Copyright 2013 © Mathias Kende. All rights reserved.

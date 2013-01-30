@@ -2,7 +2,7 @@ package SQL::Exec::SQLite;
 use strict;
 use warnings;
 use Exporter 'import';
-use SQL::Exec '/.*/', '!connect';
+use SQL::Exec '/.*/', '!connect', '!test_driver';
 
 our @ISA = ('SQL::Exec');
 
@@ -31,6 +31,11 @@ sub get_default_connect_option {
 
 sub connect {
 	my $c = &SQL::Exec::check_options;
+
+	if (!test_driver()) {
+		$c->error("You must install the DBD::SQLitee Perl module");
+		return;
+	}
 
 	if (not $c->isa(__PACKAGE__)) {
 		bless $c, __PACKAGE__;

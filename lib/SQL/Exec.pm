@@ -1,5 +1,5 @@
 package SQL::Exec;
-our $VERSION = 0.04;
+our $VERSION = 0.05;
 use strict;
 use warnings;
 use feature 'switch';
@@ -171,6 +171,7 @@ BEGIN {
 			last_req_str => "",
 			last_req => undef,
 			req_over => 1,
+			auto_handle => 0,
 			#last_msg => undef,
 		);
 }
@@ -554,14 +555,14 @@ sub __connect {
 	my ($c, $con_str, $user, $pwd) = @_;
 	
 	if ($c->{is_connected}) {
-		$c->strict_error("The object is already connected") and return;
+		if (not $c->{auto_handle}) {
+			$c->strict_error("The object is already connected") and return;
+		}
 		$c->__disconnect();
 	}
 	
-	{
-		my $usr = $user // ''; # //
-		$c->query("login to ${con_str} with user ${usr}");
-	}
+	my $usr = $user // ''; # //
+	$c->query("login to ${con_str} with user ${usr}");
 	
 	my @l = DBI->parse_dsn($con_str);
 	if (not @l or not $l[1]) {
@@ -633,6 +634,10 @@ sub low_level_prepare {
 
 sub low_level_bind {
 	my $c = shift;
+
+	if ($c->{last_req}->{NUM_OF_PARAMS} != @_) {
+		$c->error("Invalid number of parameter (%d), expected %d", scalar(@_), $c->{last_req}->{NUM_OF_PARAMS});
+	}
 
 	my $i = 0;
 	for (@_) {
@@ -837,9 +842,31 @@ connection.
   my $h = get_default_handle();
 
 Return the default handle of the library (the one used by all function when not
-applied on an object). The returned handle may then be used as any other handle
-through the OO interface, but it will still be used by the functionnal interface
-of this library.
+applied on an object). The returned handle is an C<SQL::Exec> object and may
+then be used as any other handles through the OO interface, but it will still be
+used by the functionnal interface of this library.
+
+=head2 get_dbh
+
+  my $dbh = get_dbh();
+  my $dbh = $h->get_dbh();
+
+Returns the internal C<L<DBI>> handle to your database. This handle may be used
+in conjonction with other libraries which can accept a connected handle.
+
+Note that, because of the use of C<DBIx::Connector>, this handle may change
+during the life of your program. If possible, you should rather use the
+C<get_conn> method (see below) to get a persistant handle.
+
+=head2 get_conn
+
+  my $conn = get_conn();
+  my $conn = $h->get_conn();
+
+Returns the internal C<L<DBIx::Connector>> handle to your database. This handle
+may be used in conjonction with other libraries which can accept such a handle
+(e.g. C<L<DBIx::Lite>>). This handle will not change while you do not close your
+connection to your database.
 
 =head2 errstr
 
@@ -1031,6 +1058,7 @@ during a multi-statement query. Its default value is I<true>.
 =cut
 
 push @EXPORT_OK, ('connect', 'disconnect', 'is_connected', 'get_default_handle',
+	'get_dbh', 'get_conn',
 	'errstr', 'set_options', 'set_option', 'die_on_error', 'print_error',
 	'print_warning', 'print_query', 'strict', 'replace', 'connect_options',
 	'auto_transaction', 'auto_split', 'use_connector', 'stop_on_error');
@@ -1053,6 +1081,16 @@ sub is_connected {
 
 sub get_default_handle {
 	return just_get_handle();
+}
+
+sub get_dbh {
+	my $c = &just_get_handle;
+	return $c->{db_con}->dbh();
+}
+
+sub get_conn {
+	my $c = &just_get_handle;
+	return $c->{db_con};
 }
 
 # renvoie la dernière erreur et undef si le dernier appel a réussi.
@@ -1709,6 +1747,24 @@ sub query_one_column {
 }
 
 
+=head2 query_to_file
+
+  query_to_file(SQL, file_name, separator, new_line);
+  my $v = $h->query_one_value(SQL, file_name, separator, new_line);
+  query_to_file(SQL, FH, separator, new_line);
+
+This function execute an SQL query and send its output to a file or file handle.
+
+The first argument is the query to execute (which may contain only a single
+statement).
+
+The second argument is the destination of th data. You may pass either a file name
+or a reference to an I<IO> or I<GLOB>. If it is omitted the data will go to
+C<STDOUT>. If you pass a filename, you may prefix it with C<<<'>>'>>> to append
+to the file (rather that to erase it).
+
+=cut
+
 # low_level_query_to_file(req, FH, sep, nl)
 # s'il n'y a qu'un argument effectif c'est la requête
 # le suivant est le FH, etc. Ils peuvent être omis en partant de la fin.
@@ -1721,9 +1777,6 @@ sub query_one_column {
 # même si une erreur se produit (à condition qu'on l'ignore, of course).
 # Par contre on renvoie undef si on ne peut pas ouvrir le fichier demandé.
 # ou pas écrire dedans.
-#
-# Un jour il faut le réécrire pour bypasser le fetch_row_array_ref par une méthode plus rapide
-# qui réutilise le même array à chaque fois.
 sub query_to_file {
 	my $c = &check_options or return;
 	my ($req, $fh, $sep, $nl) = @_;
@@ -1903,11 +1956,11 @@ The sub-classes currently existing are the following ones:
 
 =over 4
 
-=item * L<SQLite|SQL::Exec::SQLite>: the in-file or in memory database with C<L<DBD::SQLite>>;
+=item * L<SQLite|SQL::Exec::SQLite>: the in-file or in memory database with L<DBD::SQLite>;
 
-=item * L<Oracle|SQL::Exec::Oracle>: access to Oracle database server with C<L<DBD::Oracle>>;
+=item * L<Oracle|SQL::Exec::Oracle>: access to Oracle database server with L<DBD::Oracle>;
 
-=item * L<ODBC|SQL::Exec::ODBC>: access to any ODBC enabled DBMS through C<L<DBD::ODBC>>;
+=item * L<ODBC|SQL::Exec::ODBC>: access to any ODBC enabled DBMS through L<DBD::ODBC>;
 
 =item * L<Teradata|SQL::Exec::ODBC::Teradata>: access to a Teradata database with
 the C<ODBC> driver (there is a C<DBD::Teradata> C<DBI> driver using the native
@@ -1933,8 +1986,8 @@ Examples would be good.
 
 =head1 CAVEATS
 
-There is currently no support for placeholders (named or positional) in queries.
-Mostly because I have not yet found a I<simple> way to expose this functionnality.
+There is currently no support for prepared statements and placeholders bayond
+what is exposed in the C<execute_multiple> function.
 
 =head1 BUGS
 
@@ -1945,19 +1998,20 @@ through the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=SQ
 
 At some point or another you will want to look at the L<DBI> documentation,
 mother of all database manipulation in Perl. You may also want to look at the
-C<L<DBIx::Connector>> and C<L<SQL::SplitStatement>> modules upon which C<SQL::Exec>
+L<DBIx::Connector> and L<SQL::SplitStatement> modules upon which SQL::Exec
 is based.
 
-There is several CPAN module similar to C<SQL::Exec>, I list here only the
+There is several CPAN module similar to SQL::Exec, I list here only the
 closest (e.g. which does not impose OO upon your code), you should have a look
-at them before deciding to use C<SQL::Exec>:
-C<L<DBI::Simple>>, C<L<DBIx::Simple>>, C<L<DBIx::DWIW>>, C<L<DBIx::Wrapper>>, 
-C<L<DBIx::SimpleGoBetween>>, C<L<DBIx::Sunny>>, C<L<SQL::Executor>>.
+at them before deciding to use SQL::Exec:
+L<DBI::Simple>, L<DBIx::Simple>, L<DBIx::DWIW>, C<DBIx::Wrapper>,
+L<DBIx::SimpleGoBetween>, L<DBIx::Sunny>, C<SQL::Executor>.
 
-Also, C<SQL::Exec> will try its best to enable you to run your SQL code
+Also, SQL::Exec will try its best to enable you to run your SQL code
 in a simple and efficiant way but it will not boil your coffee. You may be
-interested in other packages which may be used to go beyond C<SQL::Exec>
-functionnalities, like C<L<SQL::Abstract>> and C<L<SQL::Transformer>>.
+interested in other packages which may be used to go beyond SQL::Exec
+functionnalities, like L<SQL::Abstract>, L<DBIx::Lite>, and
+L<SQL::Translator>.
 
 =head1 AUTHOR
 
@@ -1965,8 +2019,7 @@ Mathias Kende (mathias@cpan.org)
 
 =head1 VERSION
 
-Version 0.04 (January 2013)
-
+Version 0.05 (January 2013)
 
 =head1 COPYRIGHT & LICENSE
 

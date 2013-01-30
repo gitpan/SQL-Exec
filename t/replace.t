@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 use SQL::Exec::SQLite ':all';
-use Test::Subs debug => 1;
+use Test::Subs;
 
 {
 	package Local::Foo;

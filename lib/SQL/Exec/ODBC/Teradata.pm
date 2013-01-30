@@ -4,6 +4,7 @@ use warnings;
 use Exporter 'import';
 use DBI;
 use SQL::Exec::ODBC '/.*/', '!connect', '!table_exists';
+use List::MoreUtils 'any';
 
 our @ISA = ('SQL::Exec::ODBC');
 
@@ -16,21 +17,21 @@ our %EXPORT_TAGS = ( all => \@EXPORT_OK );
 sub build_connect_args {
 	my ($c, $server, $user, $pwd, @opt) = @_;
 
-	if ($server ~~ $c->list_available_DB()) {
-		return ("dbi:ODBC:DSN=${server}", $user, $password, @opt);
+	if (any { $_ eq $server } $c->list_available_DB()) {
+		return ("dbi:ODBC:DSN=${server}", $user, $pwd, @opt);
 	} else {
 		return ("dbi:ODBC:DRIVER=Teradata;DBCNAME=${server}", $user, $pwd, @opt);	
 	}
 }
 
 # Inutile, mais ça permet de ne pas l'oublier
-sub get_default_connect_option = {
+sub get_default_connect_option {
 	my $c = shift;
 	return $c->SUPER::get_default_connect_option();
 }
 
 sub connect {
-	my $c = &check_options;
+	my $c = &SQL::Exec::check_options;
 
 	if (not $c->isa(__PACKAGE__)) {
 		bless $c, __PACKAGE__;
@@ -40,7 +41,7 @@ sub connect {
 }
 
 sub table_exists {
-	my $c = &check_options;
+	my $c = &SQL::Exec::check_options;
 	$c->check_conn() or return;
 	my ($base, $table) = @_;
 

@@ -1,5 +1,13 @@
 Revision history for Perl module SQL::Exec
 
+0.05 2013-01-30
+
+ - Add the get_dbh and get_conn fonctions
+ - Complete the documentation
+ - Correction in the replace.t test (which fails with older Test::Subs)
+ - Fix some bug in the ODBC and Teradata class.
+ - Check the number of parameters to bind
+
 0.04 2013-01-26
 
  - Fix typo in the documentation
