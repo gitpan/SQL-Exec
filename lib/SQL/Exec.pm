@@ -1,5 +1,5 @@
 package SQL::Exec;
-our $VERSION = 0.05;
+our $VERSION = 0.06;
 use strict;
 use warnings;
 use feature 'switch';
@@ -154,7 +154,7 @@ BEGIN {
 					die_on_error => 1, # utilise croak
 					print_error => 1, # utilise carp pour les erreurs
 					print_warning => 1, # utilise toujours carp
-					print_query => undef, # spécifie un channel à utiliser
+					print_query => 0, # spécifie un channel à utiliser
 					strict => 1,
 					replace => undef,
 					connect_options => undef,
@@ -441,7 +441,7 @@ sub format_dbi_error {
 	
 	# TODO: corriger ça si on n'utilise pas DBIx::Connector
 	my ($errstr, $err, $state);
-	if ($c->{db_con}) {
+	if ($c->{db_con} && $c->{db_con}->dbh()) {
 		my $dbh = $c->{db_con}->dbh();
 		$errstr = $dbh->errstr // '';
 		$err = $dbh->err // '0';
@@ -492,7 +492,7 @@ sub query {
 
 	$query = $c->__replace($query) or return;
 
-	if (defined $c->{options}{print_query}) {
+	if ($c->{options}{print_query}) {
 		chomp (my $r = $query);
 		print { $c->{options}{print_query} } $r."\n";
 	}
@@ -562,7 +562,7 @@ sub __connect {
 	}
 	
 	my $usr = $user // ''; # //
-	$c->query("login to ${con_str} with user ${usr}");
+	$c->query("login to '${con_str}' with user '${usr}'");
 	
 	my @l = DBI->parse_dsn($con_str);
 	if (not @l or not $l[1]) {
@@ -574,7 +574,7 @@ sub __connect {
 	
 	if ($c->{options}{use_connector}) {
 		$c->{db_con} = DBIx::Connector->new($con_str, $user, $pwd, $con_opt);
-		if (!$c->{db_con}) {
+		if (!$c->{db_con} || !$c->{db_con}->dbh()) {
 			$c->dbi_error("Cannot connect to the database");
 			return;
 		}	
@@ -2019,7 +2019,7 @@ Mathias Kende (mathias@cpan.org)
 
 =head1 VERSION
 
-Version 0.05 (January 2013)
+Version 0.06 (February 2013)
 
 =head1 COPYRIGHT & LICENSE
 

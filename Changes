@@ -1,5 +1,11 @@
 Revision history for Perl module SQL::Exec
 
+0.06 2013-02-04
+
+ - Same as 0.05 but for Oracle
+ - The print_query option can now correctly be set
+ - Better error reporting when the connection fails
+
 0.05 2013-01-30
 
  - Add the get_dbh and get_conn fonctions
