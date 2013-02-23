@@ -651,6 +651,21 @@ HIGH LEVEL QUERY FUNCTIONS
     This function might also returns *true* when there is an object with the
     correct name looking *like* a table (e.g. a view) in the database.
 
+    ########################################################################
+    ########
+    ########################################################################
+    ######## ## ## ## HIGH LEVEL HELPER FUNCTIONS ## ## ##
+    ########################################################################
+    ########
+    ########################################################################
+    ########
+
+    push @EXPORT_OK, ('split_query');
+
+    # TODO : décider de la sémantique (renvoie des statements vides ?) sub
+    split_query { my ($str) = @_; return grep {
+    $sql_split_grepper->split($_) } $sql_splitter->split($str); }
+
 SUB-CLASSING
     The implementation of this library is as generic as possible. However
     some specific functions can be better written for some specific database
@@ -720,7 +735,7 @@ AUTHOR
     Mathias Kende (mathias@cpan.org)
 
 VERSION
-    Version 0.06 (February 2013)
+    Version 0.07 (February 2013)
 
 COPYRIGHT & LICENSE
     Copyright 2013 © Mathias Kende. All rights reserved.

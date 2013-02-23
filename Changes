@@ -1,5 +1,11 @@
 Revision history for Perl module SQL::Exec
 
+0.07 2013-02-23
+
+ - Add support for the DBD::Oracle plsql_errstr function
+ - Fix a problem with the stop_on_error option
+ - Add preliminary support for prepared statement
+
 0.06 2013-02-04
 
  - Same as 0.05 but for Oracle

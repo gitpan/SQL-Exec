@@ -1,5 +1,5 @@
 package SQL::Exec;
-our $VERSION = 0.06;
+our $VERSION = 0.07;
 use strict;
 use warnings;
 use feature 'switch';
@@ -10,6 +10,7 @@ use List::MoreUtils 'any';
 use DBI;
 use DBIx::Connector;
 use SQL::SplitStatement;
+use SQL::Exec::Statement;
 
 # Note: This file contains both a POD documentation which describes the public
 # API of this package and a technical documentation (on the internal methods and
@@ -142,11 +143,16 @@ our %EXPORT_TAGS = ();
 
 our @CARP_NOT = ('DBIx::Connector');
 
+
+
 # The structure of a SQL::Exec object, this hash is never made an object but
 # it is copied by get_empty whenever a new object must be created.
 # N.B.: The get_empty function must be adapted if new references are added
 # inside this object (like e.g. options and restore_options), to ensure that
 # they are properly copied.
+#
+# Warning : an SQL::Exec::Statement object shares the sames structure but with
+# an added 'parent' pointer.
 my %empty_handle;
 BEGIN {
 	%empty_handle = (
@@ -388,6 +394,7 @@ sub error {
 	my ($c, $msg, @args) = @_;
 
 	$c->{errstr} = sprintf $msg, @args;
+	$c->{parent}{errstr} = $c->{errstr} if $c->{parent};
 
 	if ($c->{options}{die_on_error}) {
 		croak $c->{errstr};
@@ -403,6 +410,7 @@ sub warning {
 	my ($c, $msg, @args) = @_;
 
 	$c->{warnstr} = sprintf $msg, @args;
+	$c->{parent}{warnstr} = $c->{warnstr} if $c->{parent};
 
 	if ($c->{options}{print_warning}) {
 		carp $c->{warnstr};
@@ -439,15 +447,17 @@ sub strict_error {
 sub format_dbi_error {
 	my ($c, $msg, @args) = @_;
 	
+	$c = $c->{parent} if $c->{parent};
+	
 	# TODO: corriger ça si on n'utilise pas DBIx::Connector
 	my ($errstr, $err, $state);
 	if ($c->{db_con} && $c->{db_con}->dbh()) {
 		my $dbh = $c->{db_con}->dbh();
-		$errstr = $dbh->errstr // '';
+		$errstr = $dbh->errstr // $dbh->func('plsql_errstr') // '';
 		$err = $dbh->err // '0';
 		$state = $dbh->state // '0'; # // pour la coloration syntaxique de Gedit
 	} else {
-		$errstr = $DBI::errstr // '';
+		$errstr = $DBI::errstr // DBI::func('plsql_errstr') // '';
 		$err = $DBI::err // '0';
 		$state = $DBI::state // '0'; # // pour la coloration syntaxique de Gedit
 	}
@@ -508,7 +518,9 @@ sub query {
 sub check_conn {
 	my ($c) = @_;
 
-	if (!$c->{is_connected}) {
+	my $rc = $c->{parent} ? $c->{parent} : $c;
+	
+	if (!$rc->{is_connected}) {
 		$c->error("The library is not connected");
 		return;
 	}
@@ -655,7 +667,7 @@ sub low_level_bind {
 # be returned on success).
 sub low_level_execute {
 	my ($c) = @_;
-	confess "No statement currently prepared" if $c->{req_over};
+	#confess "No statement currently prepared" if $c->{req_over};
 
 	my $v = $c->{last_req}->execute();
 	if (!$v) {
@@ -671,7 +683,7 @@ sub low_level_execute {
 # its content must be copied somewhere before the next call.
 sub low_level_fetchrow_arrayref {
 	my ($c) = @_;
-	confess "No statement currently prepared" if $c->{req_over};
+	#confess "No statement currently prepared" if $c->{req_over};
 
 	my $row = $c->{last_req}->fetchrow_arrayref();
 	if (!$row && $c->{last_req}->err) {
@@ -686,7 +698,7 @@ sub low_level_fetchrow_arrayref {
 
 sub low_level_finish {
 	my ($c) = @_;
-	confess "No statement currently prepared" if $c->{req_over};
+	#confess "No statement currently prepared" if $c->{req_over};
 
 	$c->{last_req}->finish;
 	$c->{req_over} = 1;
@@ -699,7 +711,7 @@ sub low_level_finish {
 # want to read to raw.
 sub test_next_row {
 	my ($c) = @_;
-	confess "No statement currently prepared" if $c->{req_over};
+	#confess "No statement currently prepared" if $c->{req_over};
 	
 	return $c->{last_req}->fetchrow_arrayref() || $c->{last_req}->err
 }
@@ -719,7 +731,7 @@ my $sql_splitter = SQL::SplitStatement->new(%splitstatement_opt);
 my $sql_split_grepper = SQL::SplitStatement->new(%splitstatement_opt_grep);
 
 # split a string containing multiple query separated by ';' characters.
-sub split_query {
+sub __split_query {
 	my ($c, $str) = @_;
 	return $str if not $c->{options}{auto_split};
 	return grep { $sql_split_grepper->split($_) } $sql_splitter->split($str);
@@ -728,7 +740,7 @@ sub split_query {
 sub get_one_query {
 	my ($c, $str) = @_;
 
-	my @l = $c->split_query($str);
+	my @l = $c->__split_query($str);
 
 	if (@l > 1) {
 		return $c->error("The supplied query contains more than one statement");
@@ -1215,7 +1227,7 @@ sub use_connector {
 }
 
 sub stop_on_error {
-	my $c = get_handle;
+	my $c = &get_handle;
 	return $c->__set_boolean_opt('stop_on_error', @_);
 }
 
@@ -1495,9 +1507,9 @@ sub execute {
 	$c->check_conn() or return;
 	my @queries;
 	if ($_[0] and ref $_[0] and reftype $_[0] eq 'ARRAY') {
-		@queries = map { $c->split_query($_) } @{$_[0]};
+		@queries = map { $c->__split_query($_) } @{$_[0]};
 	} else {
-		@queries = $c->split_query($_[0]);
+		@queries = $c->__split_query($_[0]);
 	}
 	
 	my $proc = sub {
@@ -1834,6 +1846,19 @@ sub query_to_file {
 ################################################################################
 ################################################################################
 ##                                                                            ##
+##                       PREPARED STATEMENTS FUNCTIONS                        ##
+##                                                                            ##
+################################################################################
+################################################################################
+
+sub prepare {
+	my $c = &get_handle;
+	return SQL::Exec::Statement->new($c, @_);
+}
+
+################################################################################
+################################################################################
+##                                                                            ##
 ##                         HIGH LEVEL QUERY FUNCTIONS                         ##
 ##                                                                            ##
 ################################################################################
@@ -1934,6 +1959,27 @@ sub table_exists {
 
 }
 
+=for comment
+
+################################################################################
+################################################################################
+##                                                                            ##
+##                         HIGH LEVEL HELPER FUNCTIONS                        ##
+##                                                                            ##
+################################################################################
+################################################################################
+
+push @EXPORT_OK, ('split_query');
+
+
+# TODO : décider de la sémantique (renvoie des statements vides ?)
+sub split_query {
+	my ($str) = @_;
+	return grep { $sql_split_grepper->split($_) } $sql_splitter->split($str);
+}
+
+=cut
+
 $EXPORT_TAGS{'all'} = [ @EXPORT_OK ];
 
 1;
@@ -2019,7 +2065,7 @@ Mathias Kende (mathias@cpan.org)
 
 =head1 VERSION
 
-Version 0.06 (February 2013)
+Version 0.07 (February 2013)
 
 =head1 COPYRIGHT & LICENSE
 

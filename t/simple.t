@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 use SQL::Exec::SQLite;
-use Test::Subs debug => 1;
+use Test::Subs;
 
 test {
 	SQL::Exec::SQLite::connect(':memory:')
