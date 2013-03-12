@@ -1,5 +1,6 @@
 Changes
 lib/SQL/Exec.pm
+lib/SQL/Exec/Mapper.pm
 lib/SQL/Exec/ODBC.pm
 lib/SQL/Exec/ODBC/Teradata.pm
 lib/SQL/Exec/Oracle.pm

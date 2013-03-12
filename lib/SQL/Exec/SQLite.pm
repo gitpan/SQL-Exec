@@ -69,8 +69,8 @@ C<SQL::Exec::SQLite>.
 
 =head1 CONSTRUCTOR
 
-  my $c = SQL::Exec->new(file);
-  my $c = SQL::Exec->new(file, opts);
+  my $c = SQL::Exec::SQLite->new(file);
+  my $c = SQL::Exec::SQLite->new(file, opts);
 
 The C<new> constructor of this package takes only a single argument which is the
 name of the file to use as a database. The constructor can also takes an optionnal

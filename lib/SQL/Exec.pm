@@ -1,5 +1,5 @@
 package SQL::Exec;
-our $VERSION = 0.07;
+our $VERSION = 0.08;
 use strict;
 use warnings;
 use feature 'switch';
@@ -451,13 +451,17 @@ sub format_dbi_error {
 	
 	# TODO: corriger ça si on n'utilise pas DBIx::Connector
 	my ($errstr, $err, $state);
-	if ($c->{db_con} && $c->{db_con}->dbh()) {
+	# TODO: ici on utilise le fait que dbh() renvoie un hashref (toujours), il faudrait
+	# voir si on peut tester la connection plus proprement sans dépendre de la
+	# représentation qu'en fait DBIx::Connector.
+	# le test de dbh est inutile mais plus sûr si la représentation change.
+	if ($c->{db_con} &&  blessed $c->{db_con}->dbh()) {
 		my $dbh = $c->{db_con}->dbh();
 		$errstr = $dbh->errstr // $dbh->func('plsql_errstr') // '';
 		$err = $dbh->err // '0';
 		$state = $dbh->state // '0'; # // pour la coloration syntaxique de Gedit
 	} else {
-		$errstr = $DBI::errstr // DBI::func('plsql_errstr') // '';
+		$errstr = $DBI::errstr // '';
 		$err = $DBI::err // '0';
 		$state = $DBI::state // '0'; # // pour la coloration syntaxique de Gedit
 	}
@@ -586,7 +590,12 @@ sub __connect {
 	
 	if ($c->{options}{use_connector}) {
 		$c->{db_con} = DBIx::Connector->new($con_str, $user, $pwd, $con_opt);
-		if (!$c->{db_con} || !$c->{db_con}->dbh()) {
+		# TODO: ici on utilise le fait que dbh() renvoie un hashref (toujours), il faudrait
+		# voir si on peut tester la connection plus proprement sans dépendre de la
+		# représentation qu'en fait DBIx::Connector.
+		# le test de dbh est inutile mais plus sûr si la représentation change.
+		# (idem que pour errstr).
+		if (!$c->{db_con} ||  ! blessed $c->{db_con}->dbh()) {
 			$c->dbi_error("Cannot connect to the database");
 			return;
 		}	
@@ -2065,7 +2074,7 @@ Mathias Kende (mathias@cpan.org)
 
 =head1 VERSION
 
-Version 0.07 (February 2013)
+Version 0.08 (March 2013)
 
 =head1 COPYRIGHT & LICENSE
 

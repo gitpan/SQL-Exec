@@ -1,5 +1,10 @@
 Revision history for Perl module SQL::Exec
 
+0.08 2013-??-??
+
+ - Typo in SQL::Exec::SQLite documentation
+ - Catch an error when an SQLite handle cannot be initialized
+
 0.07 2013-02-23
 
  - Add support for the DBD::Oracle plsql_errstr function
