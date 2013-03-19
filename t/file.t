@@ -12,19 +12,19 @@ test {
 
 test {
 	pipe FIN, FOUT;
+	query_to_file('select * from t', *FOUT, { line_separator => '', value_separator => ''});
+	close FOUT;
+	my $l = <FIN>;
+	close FIN;
+	$l eq "1234";
+};
+
+test {
+	pipe FIN, FOUT;
 	query_to_file('select * from t', *FOUT);
 	close FOUT;
 	my @l = <FIN>;
 	close FIN;
 	@l ~~ ["1;2\n", "3;4\n"];
-};
-
-test {
-	pipe FIN, FOUT;
-	query_to_file('select * from t', *FOUT, '', '');
-	close FOUT;
-	my $l = <FIN>;
-	close FIN;
-	$l eq "1234";
 };
 

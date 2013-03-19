@@ -1,6 +1,15 @@
 Revision history for Perl module SQL::Exec
 
-0.08 2013-??-??
+0.09 2013-03-19
+
+ - Fixed the count_lines function (too much opened transaction)
+ - Refactored the code to always use the SQL::Exec::Statement class
+ - Corrected a problem with the absence of DESTROY in the Statement class
+ - Fixed typo in all 'too much' error messages
+ - BREAK: changed the arguments for the query_to_file function
+ - added the query_one_hash and query_all_hashes functions
+
+0.08 2013-03-13
 
  - Typo in SQL::Exec::SQLite documentation
  - Catch an error when an SQLite handle cannot be initialized

@@ -60,6 +60,16 @@ sub table_exists {
 	return $c->__count_lines("select * from DBC.Tables where DatabaseName = '$base' and TableName = '$table'") == 1;
 }
 
+=for comments
+
+sub get_table_from_base {
+	my $req = send_request( "SELECT TableName FROM DBC.TablesX WHERE DatabaseName = '$_[0]' AND TableKind = 'T'");
+	my @tables = map {${$_}[0]} @{$req->fetchall_arrayref([0])};
+	map {s/ *$//} @tables;
+	return @tables;
+}
+
+=cut
 
 1;
 

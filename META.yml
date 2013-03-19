@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               SQL-Exec
-version:            0.08
+version:            0.09
 abstract:           Simple thread and fork safe database access with functionnal and OO interface
 author:
     - Mathias Kende <mathias@cpan.org>

@@ -1,5 +1,5 @@
 package SQL::Exec;
-our $VERSION = 0.08;
+our $VERSION = 0.09;
 use strict;
 use warnings;
 use feature 'switch';
@@ -48,7 +48,7 @@ but can work with any DBD driver;
 
 =item * Extremely simple, a query is always only one function or method call;
 
-=item * Everything is as (in)efficient: you choose the function to call based
+=item * Everything is as efficient: you choose the function to call based
 only on the data that you want to get back, not on some supposed performance
 benefit;
 
@@ -66,7 +66,9 @@ handled by the library with nice defaults;
 
 =item * Handles transparently network failure, fork, thread, etc;
 
-=item * Safely handle multi statement query and automatic transaction.
+=item * Safely handle multi statement query and automatic transaction;
+
+=item * Handles prepared statements and bound parameters.
 
 =back
 
@@ -168,6 +170,8 @@ BEGIN {
 					auto_split => 1,
 					use_connector => 1,
 					stop_on_error => 1,
+					line_separator => "\n", # pour query_to_file
+					value_separator => ';', # pour query_to_file
 				},
 
 			restore_options => {},
@@ -268,6 +272,15 @@ sub __set_boolean_opt {
 	$c->__restore_options();
 	my $r = $c->{options}{$o};
 	$c->{options}{$o} = __boolean($v[0]) if @v;
+	return $r;
+}
+
+sub __set_opt {
+	my ($c, $o, @v) = @_;
+
+	$c->__restore_options();
+	my $r = $c->{options}{$o};
+	$c->{options}{$o} = $v[0];
 	return $r;
 }
 
@@ -561,7 +574,7 @@ sub get_default_connect_option {
 		ChopBlanks => 0,
 		LongReadLen => 4096, # TODO: Il faut une fonction pour le modifier, Cf la doc de ce paramètre
 		#TODO: il faudrait aussi ajouter du support pour les options Taint...
-		FetchHashKeyName => 'NAME_lc'
+		FetchHashKeyName => 'NAME_lc' # cette constante apparait aussi dans low_level_fetchrow_hashref
 	);
 }
 
@@ -623,106 +636,6 @@ sub __restore_options {
 	$c->{restore_options} = {};
 
 	return;
-}
-
-
-# The function below are responsible for the effective works of the library.
-# Pretty much self-descriptive.
-
-# Prepare a statement, return false on error (if die_on_error is false)
-# only one statement may be prepared at a time in a database handle.
-sub low_level_prepare {
-	my ($c, $req_str) = @_;
-	
-	$req_str = $c->query($req_str) or return $c->error('No query to prepare');
-
-	my $s = sub { 
-			my $req = $_->prepare($req_str);
-			if (!$req) {
-				die $c->format_dbi_error("Cannot prepare the statement");
-			} else {
-				return $req;
-			}
-		};
-	my $req = eval { $c->{db_con}->run($s) };
-	if ($@) {
-		return $c->error($@);
-	}
-	$c->{last_req} = $req;
-	$c->{req_over} = 0;
-	return 1;
-}
-
-sub low_level_bind {
-	my $c = shift;
-
-	if ($c->{last_req}->{NUM_OF_PARAMS} != @_) {
-		$c->error("Invalid number of parameter (%d), expected %d", scalar(@_), $c->{last_req}->{NUM_OF_PARAMS});
-	}
-
-	my $i = 0;
-	for (@_) {
-		#TODO: gérer les différents type de paramètres
-		if (not $c->{last_req}->bind_param(++$i, $_)) {
-			$c->dbi_error("Cannot bind the parameters");
-			return;
-		}
-	}
-
-	return 1;
-}
-
-# execute the prepared statement of the handle. Return undef on failure (0 may
-# be returned on success).
-sub low_level_execute {
-	my ($c) = @_;
-	#confess "No statement currently prepared" if $c->{req_over};
-
-	my $v = $c->{last_req}->execute();
-	if (!$v) {
-		$c->dbi_error("Cannot execute the statement");
-		return;
-	}
-	
-	return $v;
-}
-
-
-# Return one raw of result. The same array ref is returned for each call so
-# its content must be copied somewhere before the next call.
-sub low_level_fetchrow_arrayref {
-	my ($c) = @_;
-	#confess "No statement currently prepared" if $c->{req_over};
-
-	my $row = $c->{last_req}->fetchrow_arrayref();
-	if (!$row && $c->{last_req}->err) {
-		$c->dbi_error("A row cannot be fetched");
-		return;
-	} elsif (!$row) {
-		return 0;
-	} else {
-		return $row;
-	}
-}
-
-sub low_level_finish {
-	my ($c) = @_;
-	#confess "No statement currently prepared" if $c->{req_over};
-
-	$c->{last_req}->finish;
-	$c->{req_over} = 1;
-
-	return $1;
-}
-
-# Test whether there is one raw available in the prepared statement.
-# this function destroy the raw so it should not be called if you actually
-# want to read to raw.
-sub test_next_row {
-	my ($c) = @_;
-	#confess "No statement currently prepared" if $c->{req_over};
-	
-	return $c->{last_req}->fetchrow_arrayref() || $c->{last_req}->err
 }
 
 my %splitstatement_opt = (
@@ -1076,13 +989,31 @@ This option is only usefull when the C<die_on_error> and C<strict_error> options
 are false and will control if the execution is interupted when an error occurs
 during a multi-statement query. Its default value is I<true>.
 
+=head3 line_separator
+
+  set_options(line_separator => val);
+  line_separator(val);
+
+This option is used only by the C<query_to_file> function. It specifies the
+line separator used between different records. The default value is C<"\n">.
+
+=head3 value_separator
+
+  set_options(value_separator => val);
+  line_separator(val);
+
+This option is used only by the C<query_to_file> function. It specifies the
+value separator used between different value of a records. The default value is
+C<';'>.
+
 =cut
 
 push @EXPORT_OK, ('connect', 'disconnect', 'is_connected', 'get_default_handle',
 	'get_dbh', 'get_conn',
 	'errstr', 'set_options', 'set_option', 'die_on_error', 'print_error',
 	'print_warning', 'print_query', 'strict', 'replace', 'connect_options',
-	'auto_transaction', 'auto_split', 'use_connector', 'stop_on_error');
+	'auto_transaction', 'auto_split', 'use_connector', 'stop_on_error',
+	'line_separator', 'value_separator');
 
 # contrairement à new, connect met des options temporaire. bien ?
 sub connect {
@@ -1240,6 +1171,16 @@ sub stop_on_error {
 	return $c->__set_boolean_opt('stop_on_error', @_);
 }
 
+sub line_separator {
+	my $c = &get_handle;
+	return $c->__set_opt('line_separator', @_);
+}
+
+sub value_separator {
+	my $c = &get_handle;
+	return $c->__set_opt('value_separator', @_);
+}
+
 # Il faut que si on recoit \{} en argument alors on renvoie
 # un restore option vide (mais pas toutes les options) car
 # c'est ce qu'attend check_option.
@@ -1294,6 +1235,8 @@ sub set_options {
 			when('auto_split') { $old{$k} = $c->auto_split($v) }
 			when('use_connector') { $old{$k} = $c->use_connector($v) }
 			when('stop_on_error') { $old{$k} = $c->stop_on_error($v) }
+			when('line_separator') { $old{$k} = $c->line_separator($v) }
+			when('value_separator') { $old{$k} = $c->value_separator($v) }
 			default { $c->strict_error("No such option: $k") and return }
 		}
 	}
@@ -1404,11 +1347,22 @@ Here are three pairs of equivalent call to C<execute_multiple>:
 
 =head2 query_one_value
 
-  my $v = query_one_value(SQL);
-  my $v = $h->query_one_value(SQL);
+  my $v = query_one_value(SQL, LIST);
+  my $v = $h->query_one_value(SQL, LIST);
 
 This function return one scalar value corresponding to the result of the SQL query
 provided. This query must be a data returning query (e.g. C<SELECT>).
+
+If C<auto_split> is activated, the SQL query provided to this function may
+not contains more than one statement (otherwise an error is thrown). If the
+option is not set, this condition will not be tested and there is no guarantee
+on what will happens if you try to execute more than one statement with this function.
+
+If the SQL statement has parameter placeholders, they should be provided in the
+arguments list of the call. As this function expects a single statement, the parameters
+should be passed directly as a list and not in an array-ref.
+
+  query_one_value('select a, b from table where a = ?', 42);
 
 The function will raise an error if nothing is returned by your query (even if
 the SQL code itself is valid) and, if in C<strict> mode, the function will also
@@ -1420,17 +1374,12 @@ C<undef>. You must not that this value may also be returned if your query return
 a C<NULL> value. In that case to check if an error happened you must check the
 C<errstr> function which will return C<undef> if there was no errors.
 
-Also, if C<auto_split> is activated, the SQL query provided to this function may
-not contains more than one statement (otherwise an error is thrown). If the
-option is not set, this condition will not be tested and there is no guarantee
-on what will happens if you try to execute more than one statement with this function.
-
 =head2 query_one_line
 
-  my @l = query_one_line(SQL);
-  my @l = $h->query_one_line(SQL);
-  my $l = query_one_line(SQL);
-  my $l = $h->query_one_line(SQL);
+  my @l = query_one_line(SQL,LIST);
+  my @l = $h->query_one_line(SQL,LIST);
+  my $l = query_one_line(SQL,LIST);
+  my $l = $h->query_one_line(SQL,LIST);
 
 This function returns a list corresponding to one line of result of the provided
 SQL query. If called in scalar context, the function will return a reference to an
@@ -1446,20 +1395,20 @@ An error will happen if the query returns no rows at all and, if you are in
 C<strict> mode, an error will also happen if the query returns more than one rows.
 
 The same limitation applies to this function as for the C<query_one_line> about
-the number of statement in your query.
+the number of statement in your query and the parameter for the statement placeholders.
 
 =head2 query_all_lines
 
-  my @a = query_all_lines(SQL);
-  my @a = $h->query_all_lines(SQL);
-  my $a = query_all_lines(SQL);
-  my $a = $h->query_all_lines(SQL);
+  my @a = query_all_lines(SQL,LIST);
+  my @a = $h->query_all_lines(SQL,LIST);
+  my $a = query_all_lines(SQL,LIST);
+  my $a = $h->query_all_lines(SQL,LIST);
 
 This function executes the given SQL and returns all the returned data from this
 query. In list context, the fonction returns a list of all the lines. Each lines
-is a reference to an array, even if there is only one column per lines. In scalar
-context, the function returns a reference to an array containing each of the array
-reference for each lines.
+is a reference to an array, even if there is only one column per lines (use the 
+query_one_column function for that). In scalar context, the function returns a
+reference to an array containing each of the array reference for each lines.
 
 In case of errors, if C<die_on_error> is not set, the function will return C<undef>
 in scalar context and an empty list in list context. This could also be the correct
@@ -1471,14 +1420,14 @@ not set and you are not in C<strict> mode, then all the data already fetched wil
 be returned but no tentatives will be done to try to fetch any more data.
 
 The same limitation applies to this function as for the C<query_one_line> about
-the number of statement in your query.
+the number of statement in your query and the parameter for the statement placeholders.
 
 =head2 query_one_column
 
-  my @l = query_one_column(SQL);
-  my @l = $h->query_one_column(SQL);
-  my $l = query_one_column(SQL);
-  my $l = $h->query_one_column(SQL);
+  my @l = query_one_column(SQL,LIST);
+  my @l = $h->query_one_column(SQL,LIST);
+  my $l = query_one_column(SQL,LIST);
+  my $l = $h->query_one_column(SQL,LIST);
 
 This function returns a list corresponding to one column of result of the provided
 SQL query. If called in scalar context, the function will return a reference to an
@@ -1494,22 +1443,56 @@ An error will happen if the query returns no columns at all and, if you are in
 C<strict> mode, an error will also happen if the query returns more than one columns.
 
 The same limitation applies to this function as for the C<query_one_line> about
-the number of statement in your query.
+the number of statement in your query and the parameter for the statement placeholders.
 
 =head2 query_to_file
 
-  query_to_file(SQL, file_name, separator, new_line);
-  my $v = $h->query_one_value(SQL, file_name, separator, new_line);
+  query_to_file(SQL, file_name, LIST);
+  my $v = $h->query_one_value(SQL, file_name, LIST);
+  query_to_file(SQL, FH, LIST);
 
-This function...
+This function execute an SQL query and send its output to a file or file handle.
+
+The first argument is the query to execute (which may contain only a single
+statement).
+
+The second argument is the destination of the data. You may pass either a file name
+or a reference to an I<IO> or I<GLOB>. If it is omitted or C<undef> the data will
+go to C<STDOUT>. If you pass a filename, you may prefix it with C<<<'>>'>>> to append
+to the file (rather that to erase it).
+
+B<Changed in 0.09:> The data are written with each value of a raw separated by the value of the
+C<value_separator> option (which defaults to C<';'>) and each row separated by
+the value of the C<line_separator> option (which defaults to C<"\n">).
+
+The same limitation applies to this function as for the C<query_one_line> about
+the number of statement in your query and the parameter for the statement placeholders.
+
+=head2 query_one_hash
+
+  my %h = query_one_hash(SQL,LIST);
+  my %h = $h->query_one_hash(SQL,LIST);
+  my $h = query_one_hash(SQL,LIST);
+  my $h = $h->query_one_hash(SQL,LIST);
+
+
+=head2 query_all_hashes
+
+  my @h = query_all_hashes(SQL,LIST);
+  my @h = $h->query_all_hashes(SQL,LIST);
+  my $h = query_all_hashes(SQL,LIST);
+  my $h = $h->query_all_hashes(SQL,LIST);
 
 =cut
 
-
 push @EXPORT_OK, ('execute', 'query_one_value', 'query_one_line', 'query_all_lines',
-				'query_one_column', 'query_to_file', 'execute_multiple');
+				'query_one_column', 'query_to_file', 'execute_multiple',
+				'query_one_hash', 'query_all_hashes');
 
-
+# Cette fonction ci est la seule que l'on ne passe pas à Statement car elle
+# manipule plusieurs statements qui doivent être exécuté au sein d'une seule
+# transaction.
+# On pourrait la réécrire en créant plein de Statement mais ça semble non optimale.
 sub execute {
 	my $c = &check_options or return;
 
@@ -1527,13 +1510,13 @@ sub execute {
 			for my $r (@queries) {
 			# TODO: lever l'erreur strict seulement dans le mode stop_on_error
 			# et s'il reste des requête à exécuter.
-				if (!$c->low_level_prepare($r)) {
+				if (!$c->SQL::Exec::Statement::low_level_prepare($r)) {
 					$c->strict_error("Some queries have not been executed due to an error") and die "EINT\n";
 					die "ESTOP:$a\n" if $c->{options}{stop_on_error};
 					next;
 				}
-				my $v = $c->low_level_execute();
-				$c->low_level_finish();
+				my $v = $c->SQL::Exec::Statement::low_level_execute();
+				$c->SQL::Exec::Statement::low_level_finish();
 				if (not defined $v) {
 					$c->strict_error("Some queries have not been executed due to an error") and die "EINT\n";
 					die "ESTOP:$a\n" if $c->{options}{stop_on_error};
@@ -1561,104 +1544,21 @@ sub execute {
 	}
 }
 
+sub __execute_multiple {
+	my ($c, $req, @params) = @_;
+	my $st = $c->__prepare($req) or return;
+	return $st->__execute(@params);
+}
+
 sub execute_multiple {
 	my $c = &check_options or return;
-
-	$c->check_conn() or return;
-	my $req = $c->get_one_query(shift @_);
-	my ($param, $d1);
-	if (not @_ or not ref $_[0]) {
-		$param = [ \@_ ];
-		$d1 = 1;
-	} elsif (reftype($_[0]) eq 'ARRAY' and (not @{$_[0]} or not ref $_[0][0])) {
-		$param = [ @_ ];
-	} elsif (reftype($_[0]) eq 'ARRAY' and reftype($_[0][0]) eq 'ARRAY') {
-		$param = $_[0];
-	} else {
-		$c->error('Invalid argument geometry');
-	}
-
-	my $proc = sub {
-			my $a = 0;
-
-			if (!$c->low_level_prepare($req)) {
-				die "EINT\n";
-			}
-			
-			if ($c->{last_req}->{NUM_OF_PARAMS} == 1 and $d1) {
-				$param = [ map { [ $_ ] } @{$param->[0]} ];
-			}
-
-			for my $p (@{$param}) {
-			# TODO: lever l'erreur strict seulement dans le mode stop_on_error
-			# et s'il reste des requête à exécuter.
-				if (not $c->low_level_bind(@{$p})) {
-					#$c->low_level_finish();
-					$c->strict_error("The query has not been executed for all value due to an error") and die "EINT\n";
-					die "ESTOP:$a\n" if $c->{options}{stop_on_error};
-					next;
-				}
-				my $v = $c->low_level_execute();
-				#$c->low_level_finish();
-				if (not defined $v) {
-					$c->strict_error("The query has not been executed for all value due to an error") and die "EINT\n";
-					die "ESTOP:$a\n" if $c->{options}{stop_on_error};
-					next;
-				}
-				$a += $v;
-			}
-			return $a;
-		};
-
-	my $v;
-	if ($c->{options}{auto_transaction}) {
-		$v = eval { $c->{db_con}->txn($proc) };
-	} else {
-		$v = eval { $proc->() };
-	}
-	$c->low_level_finish() unless $c->{req_over}; # ???
-	if ($@ =~ m/^EINT$/) {
-		return;
-	} elsif ($@ =~ m/^ESTOP:(\d+)$/) {
-		return $c->{options}{auto_transaction} ? 0 : $1;
-	} elsif ($@) {
-		die $@;
-	} else {
-		return $v;
-	}
+	return $c->__execute_multiple(@_);
 }
 
 sub __query_one_value {
-	my ($c, $req) = @_;
-
-	$req = $c->get_one_query($req) or return;
-
-	$c->check_conn() or return;
-	$c->low_level_prepare($req) or return;
-	if (not defined $c->low_level_execute())
-	{ 
-		$c->low_level_finish();
-		return;
-	}
-
-	my $row = $c->low_level_fetchrow_arrayref();
-
-	my $tmr = $c->test_next_row() if defined $c->{options}{strict};
-	$c->low_level_finish();
-
-	if (!$row) {
-		return $c->error("Not enough data");
-	} elsif ($#$row < 0) {
-		return $c->error("Not enough column");
-	}
-
-
-	if (defined  $c->{options}{strict}) {
-		$c->strict_error("To much columns") and return if $#$row > 0;
-		$c->strict_error("To much rows") and return if $tmr;
-	}
-	
-	return $row->[0];
+	my ($c, $req, @params) = @_;
+	my $st = $c->__prepare($req) or return;
+	return $st->__query_one_value(@params);
 }
 
 sub query_one_value {
@@ -1666,190 +1566,72 @@ sub query_one_value {
 	return $c->__query_one_value(@_);
 }
 
-# array ou array-ref selon le contexte (sûr, pas écraser au prochain appel).
-sub query_one_line {
-	my $c = &check_options or return;
-	
-	my $req = $c->get_one_query($_[0]) or return;
-
-	$c->check_conn() or return;
-	$c->low_level_prepare($req) or return;
-	if (not defined $c->low_level_execute()) {
-		$c->low_level_finish();
-		return;
-	}
-	my $row = $c->low_level_fetchrow_arrayref();
-	if (!$row) {
-		$c->low_level_finish();
-		return $c->error("Not enough data");
-	}
-
-	my $tmr = $c->test_next_row() if defined $c->{options}{strict};
-
-	$c->low_level_finish();
-
-	$c->strict_error("To much rows") and return if $tmr;
-
-	return wantarray ? @{$row} : [ @{$row} ];
+sub __query_one_line {
+	my ($c, $req, @params) = @_;
+	my $st = $c->__prepare($req);
+	return $st->__query_one_line(@params);
 }
 
+sub query_one_line {
+	my $c = &check_options or return;
+	return $c->__query_one_line(@_);
+}
 
-# ! Si une erreur ignorée se produit dans fetchraw alors on renvoie un tableau tronqué
-# Et non pas undef ou autre, donc il n'y a pas de moyen de savoir que l'appel a échoué.
-# En mode stricte cependant, cette situation lève une erreur elle même (et donc on a un message
-# propre si on ignore cette erreur).
-# return un tableau ou un array-ref (pour économiser une recopie).
-# renvoie toujours un tableau 2D même s'il n'y a qu'une colonne (pour assurer la cohérence du type),
-# il faut utiliser query_one_column pour avoir une colonne.
+sub __query_all_lines {
+	my ($c, $req, @params) = @_;
+	my $st = $c->__prepare($req);
+	return $st->__query_all_lines(@params);
+}
+
 sub query_all_lines {
 	my $c = &check_options or return;
-	
-	my $req = $c->get_one_query($_[0]) or return;
+	return $c->__query_all_lines(@_);
+}
 
-	$c->check_conn() or return;
-	$c->low_level_prepare($req) or return;
-	if (not defined $c->low_level_execute()) {
-		$c->low_level_finish();
-		return;
-	}
-	
-	my @rows;	
-	while (my $row = $c->low_level_fetchrow_arrayref()) {
-		push @rows, [ @{$row} ]; # Pour recopier la ligne sans quoi elle est écrasée au prochain appel.
-	}
-
-	$c->low_level_finish();
-
-	if (defined $c->{options}{strict} && $c->{last_req}->err) {
-		$c->strict_error("The data have been truncated due to an error") and return;
-	}
-
-	return wantarray() ? @rows : \@rows;
+sub __query_one_column {
+	my ($c, $req, @params) = @_;
+	my $st = $c->__prepare($req);
+	return $st->__query_one_column(@params);
 }
 
 sub query_one_column {
 	my $c = &check_options or return;
-
-	my $req = $c->get_one_query($_[0]) or return;
-
-	$c->check_conn() or return;
-	$c->low_level_prepare($req) or return;
-
-	if ($c->{last_req}->{NUM_OF_FIELDS} < 1) {
-		$c->low_level_finish();
-		return $c->error("Not enough column");
-	}
-
-	if (defined $c->{options}{strict} && $c->{last_req}->{NUM_OF_FIELDS} > 1) {
-		if ($c->strict_error("To much columns")) {
-			$c->low_level_finish();
-			return;
-		}
-	}
-
-	if (not defined $c->low_level_execute()) {
-		$c->low_level_finish();
-		return;
-	}
-	
-	my @data;
-
-	while (my $row = $c->low_level_fetchrow_arrayref()) {
-		push @data, $row->[0];
-	}
-
-	$c->low_level_finish();
-
-	if (defined $c->{options}{strict} && $c->{last_req}->err) {
-		$c->strict_error("The data have been truncated due to an error") and return;
-	}
-	
-	return wantarray() ? @data : \@data;
+	return $c->__query_one_column(@_);
 }
 
+sub __query_to_file {
+	my ($c, $req, $fh, @params) = @_;
+	my $st = $c->__prepare($req);
+	return $st->__query_to_file($fh, @params);
+}
 
-=head2 query_to_file
-
-  query_to_file(SQL, file_name, separator, new_line);
-  my $v = $h->query_one_value(SQL, file_name, separator, new_line);
-  query_to_file(SQL, FH, separator, new_line);
-
-This function execute an SQL query and send its output to a file or file handle.
-
-The first argument is the query to execute (which may contain only a single
-statement).
-
-The second argument is the destination of th data. You may pass either a file name
-or a reference to an I<IO> or I<GLOB>. If it is omitted the data will go to
-C<STDOUT>. If you pass a filename, you may prefix it with C<<<'>>'>>> to append
-to the file (rather that to erase it).
-
-=cut
-
-# low_level_query_to_file(req, FH, sep, nl)
-# s'il n'y a qu'un argument effectif c'est la requête
-# le suivant est le FH, etc. Ils peuvent être omis en partant de la fin.
-# FH peut être une chaîne, éventuellement préfixé par '>>' pour append et non pas troncation
-# du fichier. Sinon c'est STDOUT. sinon une ref à un IO ou GLOB
-# sep est ";" par défaut et nl est '\n' par défaut).
-# renvoie le nombre de lignes lues.
-# On a les même limitations en cas d'erreur que pour la fonction request_all
-# Particulièrement, on renvoie toujours le  nombre de lignes lues
-# même si une erreur se produit (à condition qu'on l'ignore, of course).
-# Par contre on renvoie undef si on ne peut pas ouvrir le fichier demandé.
-# ou pas écrire dedans.
 sub query_to_file {
 	my $c = &check_options or return;
-	my ($req, $fh, $sep, $nl) = @_;
-	
-	$req = $c->get_one_query($req) or return;
-
-	my ($fout, $to_close);
-	if (not defined $fh) {
-		$fout = \*STDOUT;
-	} elsif (openhandle($fh)) {
-		$fout = $fh;
-	} elsif (!ref($fh)) {
-		$fh =~ m{^\s*(>{1,2})?\s*(.*)$};
-		if (!open $fout, ($1 // '>'), $2) { # //
-			return $c->error("Cannot open file '$fh': $!");
-		}
-		$to_close = 1;
-	} else {
-		return $c->error("Don't know what to do with fh argument '$fh'");
-	}
-	
-	$c->check_conn() or return;
-	$c->low_level_prepare($req) or return;
-	if (not defined $c->low_level_execute()) {
-		$c->low_level_finish();
-		return;
-	}
-
-	my $count = 0;
-	{
-		local $, = $sep // ';';
-		local $\ = $nl // "\n";
-		while (my $row = $c->low_level_fetchrow_arrayref()) {
-			if (not (print $fout @{$row})) {
-				close $fout if $to_close;
-				$c->low_level_finish();
-				$c->error("Cannot write to file: $!");
-				return $count;
-			}
-			$count++;
-		}
-		close $fout if $to_close;
-	}
-
-	$c->low_level_finish();
-
-	if (defined $c->{options}{strict} && $c->{last_req}->err) {
-		$c->strict_error("The data have been truncated due to an error") and return;
-	}
-	
-	return $count;
+	return $c->__query_to_file(@_);
 }
+
+sub __query_one_hash {
+	my ($c, $req, @params) = @_;
+	my $st = $c->__prepare($req);
+	return $st->__query_one_hash(@params);
+}
+
+sub query_one_hash {
+	my $c = &check_options or return;
+	return $c->__query_one_hash(@_);
+}
+
+sub __query_all_hashes {
+	my ($c, $req, @params) = @_;
+	my $st = $c->__prepare($req);
+	return $st->__query_all_hashes(@params);
+}
+
+sub query_all_hashes {
+	my $c = &check_options or return;
+	return $c->__query_all_hashes(@_);
+}
+
 
 
 ################################################################################
@@ -1860,8 +1642,43 @@ sub query_to_file {
 ################################################################################
 ################################################################################
 
+=head1 PREPARED STATEMENTS
+
+The library offers full support for prepared statements which can be executed
+multiple times with different parameters.
+
+=head2 prepare
+
+  $st = prepare(SQL);
+  $st = $h->prepare(SQL);
+
+All L<standard query functions|/STANDARD QUERY FUNCTIONS> are accessible through
+prepared statements
+
+=head2 Using a prepared statement
+
+  $st->execute(LIST);
+  $st->query_one_value(LIST);
+  $st->query_one_line(LIST);
+  $st->query_all_lines(LIST);
+  $st->query_one_column(LIST);
+  $st->query_to_file(FH, LIST);
+  $st->query_to_file(filename, LIST);
+  $st->query_one_hash(LIST);
+  $st->query_all_hashes(LIST);
+
+
+=cut
+
+push @EXPORT_OK, ('prepare');
+
+sub __prepare {
+	my ($c, @p) = @_ or return;
+	return SQL::Exec::Statement->new($c, @p);
+}
+
 sub prepare {
-	my $c = &get_handle;
+	my $c = &check_options or return;
 	return SQL::Exec::Statement->new($c, @_);
 }
 
@@ -1925,7 +1742,8 @@ sub __count_lines {
 			}
 		};
 
-	my $v = eval { $c->{db_con}->txn($proc) };
+#	my $v = eval { $c->{db_con}->txn($proc) };
+	my $v = eval { $proc->() }; # la "transaction" est ouverte dans __query_one_value
 
 	if ($@ =~ m/^EINT$/) {
 		return;
@@ -1955,8 +1773,7 @@ sub table_exists {
 	$table = $c->__replace($table);
 		
 	eval {
-			$c->low_level_prepare("select * from $table") or die "FAIL\n";
-			$c->low_level_finish();
+			$c->__prepare("select * from $table") or die "FAIL\n";
 			1;
 		};
 
@@ -2039,11 +1856,6 @@ not the case, you should report this as a L<bug|/"BUGS">.
 
 Examples would be good.
 
-=head1 CAVEATS
-
-There is currently no support for prepared statements and placeholders bayond
-what is exposed in the C<execute_multiple> function.
-
 =head1 BUGS
 
 Please report any bugs or feature requests to C<bug-sql-exec@rt.cpan.org>, or
@@ -2074,7 +1886,7 @@ Mathias Kende (mathias@cpan.org)
 
 =head1 VERSION
 
-Version 0.08 (March 2013)
+Version 0.09 (March 2013)
 
 =head1 COPYRIGHT & LICENSE
 

@@ -11,6 +11,10 @@ test {
 
 test {
 	count_lines('select * from v') == 2
-}
+};
+
+failwith {
+	count_lines('select * from w') == 2
+} 'no such table';
 
 

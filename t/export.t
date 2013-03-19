@@ -25,6 +25,6 @@ test {
 
 failwith {
 	query_one_line('select 1, 2 union select 3, 4')
-} 'To much rows';
+} 'Too much rows';
 
 

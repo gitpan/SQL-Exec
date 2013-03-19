@@ -12,6 +12,11 @@ test {
 };
 
 test {
+	my $st = $db->prepare('select 42');
+	$st->query_one_value() == 42
+};
+
+test {
 	$st1 = $db->prepare('insert into t (a) values (?)');
 };
 
