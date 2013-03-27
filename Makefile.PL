@@ -21,6 +21,7 @@ WriteMakefile(
 				'Exporter' => 0,
 				'Carp' => 0,
 				'DBI' => 0,
+				'DBI::Const::GetInfoType' => 0,
 				'Scalar::Util' => 0,
 				'List::MoreUtils' => 0,
 				'DBIx::Connector' => 0,

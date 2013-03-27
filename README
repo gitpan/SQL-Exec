@@ -25,9 +25,9 @@ SYNOPSIS
     *   Extremely simple, a query is always only one function or method
         call;
 
-    *   Everything is as (in)efficient: you choose the function to call
-        based only on the data that you want to get back, not on some
-        supposed performance benefit;
+    *   Everything is as efficient: you choose the function to call based
+        only on the data that you want to get back, not on some supposed
+        performance benefit;
 
     *   Supports both OO and functional paradigm with the same interface and
         functionalities;
@@ -43,7 +43,9 @@ SYNOPSIS
 
     *   Handles transparently network failure, fork, thread, etc;
 
-    *   Safely handle multi statement query and automatic transaction.
+    *   Safely handle multi statement query and automatic transaction;
+
+    *   Handles prepared statements and bound parameters.
 
     All this means that SQL::Exec is extremely beginners friendly, it can be
     used with no advanced knowledge of Perl and code using it can be easily
@@ -420,6 +422,22 @@ GETTER/SETTER AND OPTIONS
     an error occurs during a multi-statement query. Its default value is
     *true*.
 
+   line_separator
+      set_options(line_separator => val);
+      line_separator(val);
+
+    This option is used only by the "query_to_file" function. It specifies
+    the line separator used between different records. The default value is
+    "\n".
+
+   value_separator
+      set_options(value_separator => val);
+      line_separator(val);
+
+    This option is used only by the "query_to_file" function. It specifies
+    the value separator used between different value of a records. The
+    default value is ';'.
+
     sub set_option { my $c = &get_handle;
 
             return $c->set_options({$_[0] => $_[1]}) if @_ == 2;
@@ -503,12 +521,25 @@ STANDARD QUERY FUNCTIONS
       execute_multiple('insert into t values (?)', [[1], [2], [3]]);
 
   query_one_value
-      my $v = query_one_value(SQL);
-      my $v = $h->query_one_value(SQL);
+      my $v = query_one_value(SQL, LIST);
+      my $v = $h->query_one_value(SQL, LIST);
 
     This function return one scalar value corresponding to the result of the
     SQL query provided. This query must be a data returning query (e.g.
     "SELECT").
+
+    If "auto_split" is activated, the SQL query provided to this function
+    may not contains more than one statement (otherwise an error is thrown).
+    If the option is not set, this condition will not be tested and there is
+    no guarantee on what will happens if you try to execute more than one
+    statement with this function.
+
+    If the SQL statement has parameter placeholders, they should be provided
+    in the arguments list of the call. As this function expects a single
+    statement, the parameters should be passed directly as a list and not in
+    an array-ref.
+
+      query_one_value('select a, b from table where a = ?', 42);
 
     The function will raise an error if nothing is returned by your query
     (even if the SQL code itself is valid) and, if in "strict" mode, the
@@ -521,17 +552,11 @@ STANDARD QUERY FUNCTIONS
     happened you must check the "errstr" function which will return "undef"
     if there was no errors.
 
-    Also, if "auto_split" is activated, the SQL query provided to this
-    function may not contains more than one statement (otherwise an error is
-    thrown). If the option is not set, this condition will not be tested and
-    there is no guarantee on what will happens if you try to execute more
-    than one statement with this function.
-
   query_one_line
-      my @l = query_one_line(SQL);
-      my @l = $h->query_one_line(SQL);
-      my $l = query_one_line(SQL);
-      my $l = $h->query_one_line(SQL);
+      my @l = query_one_line(SQL,LIST);
+      my @l = $h->query_one_line(SQL,LIST);
+      my $l = query_one_line(SQL,LIST);
+      my $l = $h->query_one_line(SQL,LIST);
 
     This function returns a list corresponding to one line of result of the
     provided SQL query. If called in scalar context, the function will
@@ -549,19 +574,21 @@ STANDARD QUERY FUNCTIONS
     than one rows.
 
     The same limitation applies to this function as for the "query_one_line"
-    about the number of statement in your query.
+    about the number of statement in your query and the parameter for the
+    statement placeholders.
 
   query_all_lines
-      my @a = query_all_lines(SQL);
-      my @a = $h->query_all_lines(SQL);
-      my $a = query_all_lines(SQL);
-      my $a = $h->query_all_lines(SQL);
+      my @a = query_all_lines(SQL,LIST);
+      my @a = $h->query_all_lines(SQL,LIST);
+      my $a = query_all_lines(SQL,LIST);
+      my $a = $h->query_all_lines(SQL,LIST);
 
     This function executes the given SQL and returns all the returned data
     from this query. In list context, the fonction returns a list of all the
     lines. Each lines is a reference to an array, even if there is only one
-    column per lines. In scalar context, the function returns a reference to
-    an array containing each of the array reference for each lines.
+    column per lines (use the query_one_column function for that). In scalar
+    context, the function returns a reference to an array containing each of
+    the array reference for each lines.
 
     In case of errors, if "die_on_error" is not set, the function will
     return "undef" in scalar context and an empty list in list context. This
@@ -574,13 +601,14 @@ STANDARD QUERY FUNCTIONS
     try to fetch any more data.
 
     The same limitation applies to this function as for the "query_one_line"
-    about the number of statement in your query.
+    about the number of statement in your query and the parameter for the
+    statement placeholders.
 
   query_one_column
-      my @l = query_one_column(SQL);
-      my @l = $h->query_one_column(SQL);
-      my $l = query_one_column(SQL);
-      my $l = $h->query_one_column(SQL);
+      my @l = query_one_column(SQL,LIST);
+      my @l = $h->query_one_column(SQL,LIST);
+      my $l = query_one_column(SQL,LIST);
+      my $l = $h->query_one_column(SQL,LIST);
 
     This function returns a list corresponding to one column of result of
     the provided SQL query. If called in scalar context, the function will
@@ -598,18 +626,13 @@ STANDARD QUERY FUNCTIONS
     more than one columns.
 
     The same limitation applies to this function as for the "query_one_line"
-    about the number of statement in your query.
+    about the number of statement in your query and the parameter for the
+    statement placeholders.
 
   query_to_file
-      query_to_file(SQL, file_name, separator, new_line);
-      my $v = $h->query_one_value(SQL, file_name, separator, new_line);
-
-    This function...
-
-  query_to_file
-      query_to_file(SQL, file_name, separator, new_line);
-      my $v = $h->query_one_value(SQL, file_name, separator, new_line);
-      query_to_file(SQL, FH, separator, new_line);
+      query_to_file(SQL, file_name, LIST);
+      my $v = $h->query_one_value(SQL, file_name, LIST);
+      query_to_file(SQL, FH, LIST);
 
     This function execute an SQL query and send its output to a file or file
     handle.
@@ -617,10 +640,56 @@ STANDARD QUERY FUNCTIONS
     The first argument is the query to execute (which may contain only a
     single statement).
 
-    The second argument is the destination of th data. You may pass either a
-    file name or a reference to an *IO* or *GLOB*. If it is omitted the data
-    will go to "STDOUT". If you pass a filename, you may prefix it with
-    "<<'">'>>> to append to the file (rather that to erase it).
+    The second argument is the destination of the data. You may pass either
+    a file name or a reference to an *IO* or *GLOB*. If it is omitted or
+    "undef" the data will go to "STDOUT". If you pass a filename, you may
+    prefix it with "<<'">'>>> to append to the file (rather that to erase
+    it).
+
+    Changed in 0.09: The data are written with each value of a raw separated
+    by the value of the "value_separator" option (which defaults to ';') and
+    each row separated by the value of the "line_separator" option (which
+    defaults to "\n").
+
+    The same limitation applies to this function as for the "query_one_line"
+    about the number of statement in your query and the parameter for the
+    statement placeholders.
+
+  query_one_hash
+      my %h = query_one_hash(SQL,LIST);
+      my %h = $h->query_one_hash(SQL,LIST);
+      my $h = query_one_hash(SQL,LIST);
+      my $h = $h->query_one_hash(SQL,LIST);
+
+  query_all_hashes
+      my @h = query_all_hashes(SQL,LIST);
+      my @h = $h->query_all_hashes(SQL,LIST);
+      my $h = query_all_hashes(SQL,LIST);
+      my $h = $h->query_all_hashes(SQL,LIST);
+
+PREPARED STATEMENTS
+    The library offers full support for prepared statements which can be
+    executed multiple times with different parameters.
+
+  prepare
+      $st = prepare(SQL);
+      $st = $h->prepare(SQL);
+
+    All standard query functions are accessible through prepared statements,
+    except that the "execute" function behave exactly like the
+    "execute_multiple" function. Users are encouraged to use the "execute"
+    name when manipulating prepared statement.
+
+  Using a prepared statement
+      $st->execute(LIST);
+      $st->query_one_value(LIST);
+      $st->query_one_line(LIST);
+      $st->query_all_lines(LIST);
+      $st->query_one_column(LIST);
+      $st->query_to_file(FH, LIST);
+      $st->query_to_file(filename, LIST);
+      $st->query_one_hash(LIST);
+      $st->query_all_hashes(LIST);
 
 HIGH LEVEL QUERY FUNCTIONS
     These functions (or method) provide higher level interface to the
@@ -650,6 +719,44 @@ HIGH LEVEL QUERY FUNCTIONS
 
     This function might also returns *true* when there is an object with the
     correct name looking *like* a table (e.g. a view) in the database.
+
+  get_columns
+      my @c = get_columns(table_name);
+      my $c = $c->get_columns(table_name);
+
+  get_primary_key
+      my @c = get_primary_key(table_name);
+      my $c = $c->get_primary_key(table_name);
+
+STATEMENTS INFORMATION FUNCTIONS
+    All the functions (or methods) below can be applied either to an
+    SQL::Exec object (or to the default object) in which case they will
+    return informations about the previous query that was executed, or they
+    can be applied to a prepared statement in which case they will return
+    information about the statement currently prepared.
+
+    The only exception is that queries executed through the "execute"
+    function/method will not count as the last query for these functions.
+    This does not apply to the "execute" method of a prepared statement nor
+    to the "execute_multiple" function/method.
+
+  num_of_params
+      my $n = num_of_params();
+      my $n = $c->num_of_params();
+      my $n = $st->num_of_params();
+
+    Returns the number of
+
+  num_of_fields
+      my $n = num_of_fields();
+      my $n = $c->num_of_fields();
+      my $n = $st->num_of_fields();
+
+  get_fields
+      my @f = get_fields();
+      my $f = get_fields();
+      my @f = $st->get_fields();
+      my @f = $st->get_fields();
 
     ########################################################################
     ########
@@ -705,10 +812,6 @@ SUB-CLASSING
 EXAMPLES
     Examples would be good.
 
-CAVEATS
-    There is currently no support for prepared statements and placeholders
-    bayond what is exposed in the "execute_multiple" function.
-
 BUGS
     Please report any bugs or feature requests to
     "bug-sql-exec@rt.cpan.org", or through the web interface at
@@ -735,7 +838,7 @@ AUTHOR
     Mathias Kende (mathias@cpan.org)
 
 VERSION
-    Version 0.08 (March 2013)
+    Version 0.10 (March 2013)
 
 COPYRIGHT & LICENSE
     Copyright 2013 © Mathias Kende. All rights reserved.

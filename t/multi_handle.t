@@ -22,4 +22,8 @@ test {
 	query_one_value('select * from v') == 1
 };
 
+failwith {
+	prepare('select a from u');
+} 'select a from u';
+
 

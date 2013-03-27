@@ -1,5 +1,12 @@
 Revision history for Perl module SQL::Exec
 
+0.10 2013-03-27
+
+ - Cleaned the header of SQL::Exec::Statement
+ - Added clean implementations of get_columns and table_exists functions
+ - Added num_of_fields, num_of_params and get_fields functions
+ - Fixed a bug related as to which query is printed in case of errors
+
 0.09 2013-03-19
 
  - Fixed the count_lines function (too much opened transaction)

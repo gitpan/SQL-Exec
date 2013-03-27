@@ -1,16 +1,9 @@
 package SQL::Exec::Statement;
 use strict;
 use warnings;
-use feature 'switch';
-use Carp;
-use Scalar::Util 'blessed', 'reftype', 'openhandle';
-use List::MoreUtils 'any';
+use Scalar::Util 'reftype', 'openhandle';
 
 use parent 'SQL::Exec';
-
-# Note: This file contains both a POD documentation which describes the public
-# API of this package and a technical documentation (on the internal methods and
-# how to subclasse this package) in standard Perl comments.
 
 =encoding utf-8
 
@@ -33,11 +26,6 @@ modify it under the same terms as Perl itself.
 
 our @CARP_NOT = ('DBIx::Connector');
 
-			
-# This variable stores the default instance of this class. It is set up in a
-# BEGIN block.
-my $default_handle;
-
 # Return a reference of a new copy of the empty_handle hash, used by the
 # constructors of the class.
 sub get_empty {
@@ -58,6 +46,7 @@ sub new {
 	$c->set_options(%{$parent->{options}});
 	$c->{db_con} = $parent->{db_con};
 	$c->{is_connected} = $parent->{is_connected};
+	$c->{is_statement} = 1;
 	# on ne copie pas les restore options exprès, ce qui est en vigueur quand
 	# on crée l'objet le reste.
 	# TODO: faire un cas de test pour ça.
@@ -88,7 +77,7 @@ sub new {
 
 sub DESTROY {
 	my ($c) = shift;
-	$c->low_level_finish() unless $c->{req_over};
+	$c->low_level_finish() if defined $c->{last_req} && !$c->{req_over};
 	# we need to override the DESTROY function from SQL::Exec which disconnect
 	# the library...
 }
@@ -244,6 +233,27 @@ sub __prepare_bind_params {
 ################################################################################
 ################################################################################
 
+=for comment
+
+sub __bind_params {
+	my ($c, @p) = @_;
+
+	$c->check_conn() or return;
+
+	if (not $c->low_level_bind(@p)) {
+		$c->low_level_finish();
+		return;
+	}
+
+	return $c;
+}
+
+sub bind_params {
+	my $c = &SQL::Exec::check_options or return;
+	return $c->__bind_params(@_);
+}
+
+=cut
 
 sub __execute {
 	my ($c, @pp) = @_;
@@ -302,6 +312,8 @@ sub execute {
 	my $c = &SQL::Exec::check_options or return;
 	return $c->__execute(@_);
 }
+
+sub execute_multiple { goto &execute; }
 
 sub __query_one_value {
 	my ($c, @p) = @_;
@@ -607,7 +619,6 @@ sub query_all_hashes {
 	my $c = &SQL::Exec::check_options or return;
 	return $c->__query_all_hashes(@_);
 }
-
 
 1;
 

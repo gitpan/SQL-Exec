@@ -1,5 +1,5 @@
 package SQL::Exec;
-our $VERSION = 0.09;
+our $VERSION = '0.10';
 use strict;
 use warnings;
 use feature 'switch';
@@ -8,6 +8,7 @@ use Exporter 'import';
 use Scalar::Util 'blessed', 'reftype', 'openhandle';
 use List::MoreUtils 'any';
 use DBI;
+use DBI::Const::GetInfoType;
 use DBIx::Connector;
 use SQL::SplitStatement;
 use SQL::Exec::Statement;
@@ -180,6 +181,7 @@ BEGIN {
 			is_connected => 0,
 			last_req_str => "",
 			last_req => undef,
+			last_stmt => undef,
 			req_over => 1,
 			auto_handle => 0,
 			#last_msg => undef,
@@ -460,7 +462,7 @@ sub strict_error {
 sub format_dbi_error {
 	my ($c, $msg, @args) = @_;
 	
-	$c = $c->{parent} if $c->{parent};
+	#$c = $c->{parent} if $c->{parent};
 	
 	# TODO: corriger ça si on n'utilise pas DBIx::Connector
 	my ($errstr, $err, $state);
@@ -574,7 +576,9 @@ sub get_default_connect_option {
 		ChopBlanks => 0,
 		LongReadLen => 4096, # TODO: Il faut une fonction pour le modifier, Cf la doc de ce paramètre
 		#TODO: il faudrait aussi ajouter du support pour les options Taint...
-		FetchHashKeyName => 'NAME_lc' # cette constante apparait aussi dans low_level_fetchrow_hashref
+		FetchHashKeyName => 'NAME_lc'
+		# cette constante apparait aussi dans low_level_fetchrow_hashref, dans
+		# __get_columns_dummy et dans get_columns (juste lc);
 	);
 }
 
@@ -1546,8 +1550,8 @@ sub execute {
 
 sub __execute_multiple {
 	my ($c, $req, @params) = @_;
-	my $st = $c->__prepare($req) or return;
-	return $st->__execute(@params);
+	$c->{last_stmt} = $c->__prepare($req) or return;
+	return $c->{last_stmt}->__execute(@params);
 }
 
 sub execute_multiple {
@@ -1557,8 +1561,8 @@ sub execute_multiple {
 
 sub __query_one_value {
 	my ($c, $req, @params) = @_;
-	my $st = $c->__prepare($req) or return;
-	return $st->__query_one_value(@params);
+	$c->{last_stmt} = $c->__prepare($req) or return;
+	return $c->{last_stmt}->__query_one_value(@params);
 }
 
 sub query_one_value {
@@ -1568,8 +1572,8 @@ sub query_one_value {
 
 sub __query_one_line {
 	my ($c, $req, @params) = @_;
-	my $st = $c->__prepare($req);
-	return $st->__query_one_line(@params);
+	$c->{last_stmt} = $c->__prepare($req);
+	return $c->{last_stmt}->__query_one_line(@params);
 }
 
 sub query_one_line {
@@ -1579,8 +1583,8 @@ sub query_one_line {
 
 sub __query_all_lines {
 	my ($c, $req, @params) = @_;
-	my $st = $c->__prepare($req);
-	return $st->__query_all_lines(@params);
+	$c->{last_stmt} = $c->__prepare($req);
+	return $c->{last_stmt}->__query_all_lines(@params);
 }
 
 sub query_all_lines {
@@ -1590,8 +1594,8 @@ sub query_all_lines {
 
 sub __query_one_column {
 	my ($c, $req, @params) = @_;
-	my $st = $c->__prepare($req);
-	return $st->__query_one_column(@params);
+	$c->{last_stmt} = $c->__prepare($req);
+	return $c->{last_stmt}->__query_one_column(@params);
 }
 
 sub query_one_column {
@@ -1601,8 +1605,8 @@ sub query_one_column {
 
 sub __query_to_file {
 	my ($c, $req, $fh, @params) = @_;
-	my $st = $c->__prepare($req);
-	return $st->__query_to_file($fh, @params);
+	$c->{last_stmt} = $c->__prepare($req);
+	return $c->{last_stmt}->__query_to_file($fh, @params);
 }
 
 sub query_to_file {
@@ -1612,8 +1616,8 @@ sub query_to_file {
 
 sub __query_one_hash {
 	my ($c, $req, @params) = @_;
-	my $st = $c->__prepare($req);
-	return $st->__query_one_hash(@params);
+	$c->{last_stmt} = $c->__prepare($req);
+	return $c->{last_stmt}->__query_one_hash(@params);
 }
 
 sub query_one_hash {
@@ -1623,8 +1627,8 @@ sub query_one_hash {
 
 sub __query_all_hashes {
 	my ($c, $req, @params) = @_;
-	my $st = $c->__prepare($req);
-	return $st->__query_all_hashes(@params);
+	$c->{last_stmt} = $c->__prepare($req);
+	return $c->{last_stmt}->__query_all_hashes(@params);
 }
 
 sub query_all_hashes {
@@ -1653,7 +1657,10 @@ multiple times with different parameters.
   $st = $h->prepare(SQL);
 
 All L<standard query functions|/STANDARD QUERY FUNCTIONS> are accessible through
-prepared statements
+prepared statements, except that the C<execute> function behave exactly like the
+C<execute_multiple> function. Users are encouraged to use the C<execute> name when
+manipulating prepared statement.
+
 
 =head2 Using a prepared statement
 
@@ -1721,9 +1728,20 @@ table exists but you do not have enough rights to access it.
 This function might also returns I<true> when there is an object with the correct
 name looking I<like> a table (e.g. a view) in the database.
 
+=head2 get_columns
+
+  my @c = get_columns(table_name);
+  my $c = $c->get_columns(table_name);
+
+=head2 get_primary_key
+
+  my @c = get_primary_key(table_name);
+  my $c = $c->get_primary_key(table_name);
+
+
 =cut
 
-push @EXPORT_OK, ('count_lines', 'table_exists');
+push @EXPORT_OK, ('count_lines', 'table_exists', 'get_columns', 'get_primary_key');
 
 
 sub __count_lines {
@@ -1763,27 +1781,273 @@ sub count_lines {
 	return $c->__count_lines(@_);
 }
 
-# test aussi le droit en lecture, très mauvaise implémentation...
-sub table_exists {
-	my $c = &check_options;
-	$c->check_conn() or return;
+sub __quote_identifier {
+	my ($c, @args) = @_;
+	# les '' deviennent undef c'est ce qu'on veut ?
+	@args = map { $_ ? split /\./, $_ : undef } @args;
+	unshift @args, ((undef) x (3 - @args));
+	my $table = eval { $c->get_dbh()->quote_identifier(@args) };
+	if ($table) {
+		return $table;
+	} else {
+		return join '.', grep { $_ } @args;
+	}
+}
 
-	my ($table) = @_;
-	
-	$table = $c->__replace($table);
-		
+# test aussi le droit en lecture, très mauvaise implémentation...
+sub __table_exists_dummy {
+	my ($c, @args) = @_;
+
+	my $table = $c->__quote_identifier(@args);
+
 	eval {
 			$c->__prepare("select * from $table") or die "FAIL\n";
 			1;
 		};
 
-	if ($@) {
+	if ($@) { # pas que dans le cas FAIL, mais aussi les autres erreurs de la bibliothèque
 		return 0;
 	} else {
 		return 1;
 	}
-
 }
+
+# If a subclasses knows that the default implementation won't work, it can
+# redefine the table_exists function to directly alias to __table_exists_dummy
+# Beware that in this case, the check_options, check_conn and replace will need
+# to be performed by the proxy function.
+sub table_exists {
+	my $c = &check_options;
+	$c->check_conn() or return;
+
+	my (@args) = @_;
+
+	my $esc = eval {
+			$c->get_dbh()->get_info($GetInfoType{SQL_SEARCH_PATTERN_ESCAPE})
+		}  // '\\'; # /
+
+	for (@args) {
+		if ($_) {
+			$_ = $c->__replace($_);
+			# See Caveat in http://search.cpan.org/dist/DBI/DBI.pm#Catalog_Methods
+			$_ =~ s/([_%])/$esc$1/g;
+		}
+	}
+
+	@args = map { $_ ? split /\./, $_ : $_ } @args; # à faire après le __replace
+
+	$c->query("[SQL::Exec] Table Exists: ".(join '.', grep { $_ } @args));
+
+	$c->error('Too many arguments') if @args > 3;
+	$c->error('Not enough arguments') if @args < 1;
+	unshift @args, ((undef) x (3 - @args));
+	
+	my @t = eval {
+			$c->get_dbh()->tables(@args, 'TABLE,VIEW');
+		};
+
+	if ($@) {
+		$c->warning("Operation not supported by your driver");
+		return $c->__table_exists_dummy(@args);
+	} elsif (@t == 1) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+sub __get_columns_dummy {
+	my ($c, @args) = @_;
+
+	my $table = $c->__quote_identifier(@args);
+
+	my $st = eval {
+			$c->__prepare("select * from $table") or die "FAIL\n";
+		};
+
+	if ($@) {
+		$c->error("unknown error, are you sure that the table '$table' exists ?");
+		return;
+	} else {
+		my @c = @{$st->{last_req}->{NAME_lc}};
+		return wantarray ? @c : \@c;
+	}
+}
+
+# If a subclasses knows that the default implementation won't work, it can
+# redefine the table_exists function to directly alias to __get_columns_dummy
+sub get_columns {
+	my $c = &check_options;
+	$c->check_conn() or return;
+
+	my (@args) = @_;
+
+	my $esc = eval {
+			$c->get_dbh()->get_info($GetInfoType{SQL_SEARCH_PATTERN_ESCAPE})
+		}  // '\\'; # /
+
+	for (@args) {
+		if ($_) {
+			$_ = $c->__replace($_);
+			# See Caveat in http://search.cpan.org/dist/DBI/DBI.pm#Catalog_Methods
+			$_ =~ s/([_%])/$esc$1/g;
+		}
+	}
+
+	@args = map { $_ ? split /\./, $_ : $_ } @args; # à faire après le __replace
+
+	$c->query("[SQL::Exec] Get Columns: ".(join '.', grep { $_ } @args));
+
+	$c->error('Too many arguments') if @args > 3;
+	$c->error('Not enough arguments') if @args < 1;
+	unshift @args, ((undef) x (3 - @args));
+	
+	my @c = eval {
+			my $sth = $c->get_dbh()->column_info(@args, undef);
+			my $ref = $sth->fetchall_arrayref();
+			map { lc $_->[3] } @{$ref};
+		};
+
+	if ($@) {
+		$c->warning("Operation not supported by your driver");
+		return $c->__table_exists_dummy(@args);
+	} elsif (@c) {
+		return wantarray ? @c : \@c;
+	} else {
+		my $table = join '.', grep { defined $_ } @args;
+		$c->error("unknown error, are you sure that the table '$table' exists ?");
+		return;
+	}
+}
+
+
+sub get_primary_key {
+	my $c = &check_options;
+	$c->check_conn() or return;
+
+	my (@args) = @_;
+
+	my $esc = eval {
+			$c->get_dbh()->get_info($GetInfoType{SQL_SEARCH_PATTERN_ESCAPE})
+		}  // '\\'; # /
+
+	for (@args) {
+		if ($_) {
+			$_ = $c->__replace($_);
+			# See Caveat in http://search.cpan.org/dist/DBI/DBI.pm#Catalog_Methods
+			$_ =~ s/([_%])/$esc$1/g;
+		}
+	}
+
+	@args = map { $_ ? split /\./, $_ : $_ } @args; # à faire après le __replace
+
+	$c->query("[SQL::Exec] Get Primary Key: ".(join '.', grep { $_ } @args));
+
+	$c->error('Too many arguments') if @args > 3;
+	$c->error('Not enough arguments') if @args < 1;
+	unshift @args, ((undef) x (3 - @args));
+	
+	my @pk = eval {
+			map { lc } $c->get_dbh()->primary_key(@args);
+		};
+
+	if ($@) {
+		$c->error("Operation not supported by your driver");
+	} else {
+		if (defined $c->{options}{strict} and not @pk) {
+			if (not $c->table_exists(@_)) {
+				$c->strict_error("Table does not exist") and return;
+			}
+		}
+		return wantarray ? @pk : \@pk;
+	}
+}
+
+################################################################################
+################################################################################
+##                                                                            ##
+##                      STATEMENTS INFORMATION FUNCTIONS                      ##
+##                                                                            ##
+################################################################################
+################################################################################
+
+
+=head1 STATEMENTS INFORMATION FUNCTIONS
+
+All the functions (or methods) below can be applied either to an SQL::Exec object
+(or to the default object) in which case they will return informations about the
+previous query that was executed, or they can be applied to a prepared statement
+in which case they will return information about the statement currently prepared.
+
+The only exception is that queries executed through the C<execute> function/method
+will not count as the last query for these functions. This does not apply to the
+C<execute> method of a prepared statement nor to the C<execute_multiple>
+function/method.
+
+=head2 num_of_params
+
+  my $n = num_of_params();
+  my $n = $c->num_of_params();
+  my $n = $st->num_of_params();
+
+Returns the number of 
+
+=head2 num_of_fields
+
+  my $n = num_of_fields();
+  my $n = $c->num_of_fields();
+  my $n = $st->num_of_fields();
+
+=head2 get_fields
+
+  my @f = get_fields();
+  my $f = get_fields();
+  my @f = $st->get_fields();
+  my @f = $st->get_fields();
+
+=cut
+
+push @EXPORT_OK, ('num_of_params', 'num_of_fields', 'get_fields');
+
+sub __get_statement {
+	my ($c) = @_;
+
+	if ($c->{is_statement}) {
+		return $c->{last_req};
+	} else {
+		$c->error('No query have ever been prepared with this object') if not $c->{last_stmt};
+		return $c->{last_stmt}->{last_req};
+	}
+}
+
+sub num_of_params {
+	my $c = &SQL::Exec::check_options or return;
+	$c->check_conn() or return;
+
+	my $stmt = $c->__get_statement();
+
+	return $stmt->{NUM_OF_PARAMS};
+}
+
+sub num_of_fields {
+	my $c = &SQL::Exec::check_options or return;
+	$c->check_conn() or return;
+
+	my $stmt = $c->__get_statement();
+
+	return $stmt->{NUM_OF_FIELDS} // 0; # / some driver returns undef instead of 0
+}
+
+sub get_fields {
+	my $c = &SQL::Exec::check_options or return;
+	$c->check_conn() or return;
+
+	my $stmt = $c->__get_statement();
+	my @fields = @{$stmt->{NAME_lc}};
+	
+	return wantarray ? @fields : \@fields; # copy to have a clean rw array
+}
+
 
 =for comment
 
@@ -1886,7 +2150,7 @@ Mathias Kende (mathias@cpan.org)
 
 =head1 VERSION
 
-Version 0.09 (March 2013)
+Version 0.10 (March 2013)
 
 =head1 COPYRIGHT & LICENSE
 

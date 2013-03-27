@@ -16,8 +16,10 @@ t/execute_multiple.t
 t/execute_split.t
 t/export.t
 t/file.t
+t/get_columns.t
 t/multi_handle.t
 t/query_hashes.t
+t/query_info.t
 t/replace.t
 t/simple.t
 t/sqlite.t
